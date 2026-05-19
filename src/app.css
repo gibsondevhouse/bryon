@@ -1,0 +1,295 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn-svelte/tailwind.css";
+@import "@fontsource-variable/inter";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+	/* Layout */
+	--sidebar-w: 260px;
+	--content-max-w: 1060px;
+
+	/* Spacing */
+	--sp-1: 4px;
+	--sp-2: 8px;
+	--sp-3: 12px;
+	--sp-4: 16px;
+	--sp-5: 20px;
+	--sp-6: 24px;
+	--sp-8: 32px;
+
+	/* Radii */
+	--radius-sm: 8px;
+	--radius-md: 12px;
+	--radius-lg: 16px;
+	--radius-xl: 24px;
+	--radius-full: 9999px;
+
+	/* Typography */
+	--font-size-body: 15px;
+	--font-size-meta: 12px;
+	--font-size-heading: 22px;
+
+	/* Motion */
+	--motion-fast: 120ms cubic-bezier(0.2, 0, 0, 1);
+	--motion-standard: 170ms cubic-bezier(0.2, 0, 0, 1);
+	--motion-slow: 220ms cubic-bezier(0.2, 0, 0, 1);
+
+	/* Surfaces */
+	--bg-base: #0d0d0f;
+	--bg-sidebar: #0f1115;
+	--bg-surface: #151820;
+	--bg-surface-hover: #1b202b;
+	--bg-input: #10141c;
+	--bg-user-msg: rgba(255, 255, 255, 0.035);
+	--bg-code: #0f131b;
+	--bg-overlay: rgba(0, 0, 0, 0.62);
+
+	/* Text roles */
+	--text-primary: #e8ebf2;
+	--text-secondary: #bcc3d0;
+	--text-muted: #8a93a3;
+	--text-placeholder: #626d83;
+	--text-inverse: #0f131b;
+
+	/* Borders */
+	--border-subtle: rgba(255, 255, 255, 0.06);
+	--border-default: rgba(255, 255, 255, 0.11);
+	--border-strong: rgba(255, 255, 255, 0.2);
+
+	/* Accent roles */
+	--accent: #4d6bfe;
+	--accent-hover: #647fff;
+	--accent-soft: rgba(77, 107, 254, 0.18);
+	--accent-text: #a8b6ff;
+
+	/* Status roles */
+	--green: #34d399;
+	--amber: #fbbf24;
+	--red: #ef4444;
+
+	/* Shadows */
+	--shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.15);
+	--shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.2);
+	--shadow-md: 0 6px 16px rgba(0, 0, 0, 0.28);
+	--shadow-lg: 0 12px 30px rgba(0, 0, 0, 0.35);
+	--shadow-composer:
+		0 0 0 1px var(--border-subtle),
+		0 -4px 30px rgba(0, 0, 0, 0.35);
+
+	/* Focus */
+	--focus-ring: var(--accent);
+	--focus-ring-offset: 2px;
+
+	/* ── shadcn bridge ── */
+	--background: var(--bg-base);
+	--foreground: var(--text-primary);
+	--card: var(--bg-surface);
+	--card-foreground: var(--text-primary);
+	--popover: var(--bg-surface);
+	--popover-foreground: var(--text-primary);
+	--primary: var(--accent);
+	--primary-foreground: #ffffff;
+	--secondary: var(--bg-surface);
+	--secondary-foreground: var(--text-secondary);
+	--muted: var(--bg-surface);
+	--muted-foreground: var(--text-muted);
+	--accent-foreground: var(--text-primary);
+	--destructive: var(--red);
+	--border: var(--border-default);
+	--input: var(--border-default);
+	--ring: var(--focus-ring);
+	--radius: 0.75rem;
+}
+
+html,
+body {
+	min-height: 100dvh;
+	margin: 0;
+}
+
+body {
+	background: var(--bg-base);
+	color: var(--text-primary);
+	font-family:
+		"Inter Variable", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+		"Helvetica Neue", sans-serif;
+	font-size: var(--font-size-body);
+	line-height: 1.6;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+	background: var(--accent-soft);
+	color: var(--text-primary);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+	background: rgba(255, 255, 255, 0.08);
+	border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+	background: rgba(255, 255, 255, 0.14);
+}
+
+@theme inline {
+	--font-sans: "Inter Variable", sans-serif;
+	--color-sidebar-ring: var(--border-default);
+	--color-sidebar-border: var(--border-subtle);
+	--color-sidebar-accent-foreground: var(--text-primary);
+	--color-sidebar-accent: var(--bg-surface-hover);
+	--color-sidebar-primary-foreground: var(--text-primary);
+	--color-sidebar-primary: var(--accent);
+	--color-sidebar-foreground: var(--text-secondary);
+	--color-sidebar: var(--bg-sidebar);
+	--color-ring: var(--ring);
+	--color-input: var(--input);
+	--color-border: var(--border);
+	--color-destructive: var(--destructive);
+	--color-accent-foreground: var(--accent-foreground);
+	--color-accent: var(--bg-surface);
+	--color-muted-foreground: var(--muted-foreground);
+	--color-muted: var(--muted);
+	--color-secondary-foreground: var(--secondary-foreground);
+	--color-secondary: var(--secondary);
+	--color-primary-foreground: var(--primary-foreground);
+	--color-primary: var(--primary);
+	--color-popover-foreground: var(--popover-foreground);
+	--color-popover: var(--popover);
+	--color-card-foreground: var(--card-foreground);
+	--color-card: var(--card);
+	--color-foreground: var(--foreground);
+	--color-background: var(--background);
+	--radius-sm: calc(var(--radius) * 0.6);
+	--radius-md: calc(var(--radius) * 0.8);
+	--radius-lg: var(--radius);
+	--radius-xl: calc(var(--radius) * 1.4);
+	--radius-2xl: calc(var(--radius) * 1.8);
+	--radius-3xl: calc(var(--radius) * 2.2);
+	--radius-4xl: calc(var(--radius) * 2.6);
+}
+
+@layer base {
+	* {
+		@apply border-border outline-ring/50;
+	}
+	body {
+		@apply text-foreground;
+	}
+	html {
+		@apply font-sans;
+	}
+
+	/* Visible keyboard focus ring (keyboard nav only) */
+	:focus {
+		outline: none;
+	}
+	:focus-visible {
+		outline: 2px solid var(--focus-ring);
+		outline-offset: var(--focus-ring-offset);
+		border-radius: var(--radius-sm);
+		transition: outline-color var(--motion-fast);
+	}
+	button:focus-visible,
+	a:focus-visible,
+	[role="button"]:focus-visible,
+	[role="menuitem"]:focus-visible,
+	[role="option"]:focus-visible,
+	summary:focus-visible {
+		outline: 2px solid var(--focus-ring);
+		outline-offset: var(--focus-ring-offset);
+	}
+	input:focus-visible,
+	textarea:focus-visible,
+	select:focus-visible {
+		outline: 2px solid var(--focus-ring);
+		outline-offset: 1px;
+	}
+}
+
+/* Prose enhancements for assistant messages */
+.prose blockquote {
+	margin: var(--sp-3) 0;
+	padding: var(--sp-2) var(--sp-4);
+	border-left: 3px solid var(--accent);
+	background: var(--accent-soft);
+	color: var(--text-secondary);
+	font-style: italic;
+	border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.prose blockquote > :first-child { margin-top: 0; }
+.prose blockquote > :last-child { margin-bottom: 0; }
+
+.prose code:not(pre code) {
+	background: var(--bg-code);
+	border: 1px solid var(--border-subtle);
+	padding: 1px 6px;
+	border-radius: 6px;
+	font-size: 0.9em;
+	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.prose pre {
+	margin: var(--sp-3) 0;
+	padding: var(--sp-3) var(--sp-4);
+	background: var(--bg-code);
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--radius-md);
+	overflow-x: auto;
+	max-height: 480px;
+	font-size: 0.875em;
+	line-height: 1.55;
+}
+.prose pre code {
+	background: transparent;
+	border: 0;
+	padding: 0;
+	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.prose table {
+	border-collapse: collapse;
+	margin: var(--sp-3) 0;
+	font-size: 0.92em;
+	width: 100%;
+}
+.prose th,
+.prose td {
+	border: 1px solid var(--border-default);
+	padding: 6px 10px;
+	text-align: left;
+}
+.prose th {
+	background: var(--bg-surface);
+	font-weight: 600;
+}
+.prose tbody tr:nth-child(even) td {
+	background: rgba(255, 255, 255, 0.015);
+}
+.prose tbody tr:hover td {
+	background: var(--bg-surface-hover);
+}
+
+.prose a {
+	color: var(--accent-text);
+	text-decoration: underline;
+	text-underline-offset: 2px;
+}
+.prose a:hover {
+	color: var(--accent-hover);
+}
+
+/* Highlight flash applied when jumping from search */
+@keyframes bryon-msg-flash {
+	0%   { background-color: var(--accent-soft); }
+	100% { background-color: transparent; }
+}
+.msg-flash {
+	animation: bryon-msg-flash 1400ms ease-out;
+	border-radius: var(--radius-sm);
+}

@@ -1,0 +1,9 @@
+import './builtins/current-time';
+import './builtins/search-kb';
+import './builtins/analyze-image';
+import './builtins/lookup-cfr';
+import './builtins/lookup-sds';
+import './builtins/read-photo-exif';
+import './builtins/web-search';
+import './builtins/read-file';
+import './builtins/list-dir';

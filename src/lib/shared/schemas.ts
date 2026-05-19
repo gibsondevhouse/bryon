@@ -1,0 +1,174 @@
+import { z } from 'zod';
+
+export const defaultLLMParams = {
+	temperature: 0.6,
+	top_p: 0.9,
+	top_k: 40,
+	repeat_penalty: 1.1,
+	num_ctx: 8192,
+	num_predict: 1024,
+	keep_alive: '10m',
+} as const;
+
+export const defaultAppSettings = {
+	host: '127.0.0.1',
+	port: 5174,
+	data_dir: '~/.local/share/bryon',
+} as const;
+
+export const defaultLLMSettings = {
+	backend: 'ollama',
+	base_url: 'http://127.0.0.1:11434',
+	model: 'gemma3:4b',
+	vision_model: 'gemma4:e4b',
+	thinking: 'normal' as 'off' | 'auto' | 'light' | 'normal' | 'extended',
+	params: defaultLLMParams,
+} as const;
+
+export const defaultWebSearchSettings = {
+	enabled: true,
+	searxng_url: '',
+	max_results: 10,
+} as const;
+
+export const defaultMemorySettings = {
+	enabled: true,
+	remember: '',
+	never_suggest: '',
+} as const;
+
+export const messageRoleSchema = z.enum([
+	'system',
+	'user',
+	'assistant',
+	'tool_call',
+	'tool_result',
+]);
+
+export const modelSourceSchema = z.enum([
+	'chat_pin',
+	'persona_default',
+	'global_default',
+	'llm_fallback',
+]);
+
+export const llmParamsSchema = z.object({
+	temperature: z.number().min(0).max(2).default(defaultLLMParams.temperature),
+	top_p: z.number().min(0).max(1).default(defaultLLMParams.top_p),
+	top_k: z.number().int().positive().default(defaultLLMParams.top_k),
+	repeat_penalty: z
+		.number()
+		.positive()
+		.default(defaultLLMParams.repeat_penalty),
+	num_ctx: z.number().int().positive().default(defaultLLMParams.num_ctx),
+	num_predict: z
+		.number()
+		.int()
+		.positive()
+		.default(defaultLLMParams.num_predict),
+	keep_alive: z.string().min(1).default(defaultLLMParams.keep_alive),
+});
+
+export const personaSchema = z.object({
+	id: z.string().min(1),
+	name: z.string().min(1),
+	systemPrompt: z.string().min(1),
+	// Legacy v1.5 columns are still parsed for DB compatibility, but v1 only
+	// uses the default Bryon persona and global chat settings.
+	defaultModel: z.string().min(1).nullable().default(null),
+	tools: z.array(z.string().min(1)).default([]),
+	paramsJson: llmParamsSchema.partial().nullable().default(null),
+	createdAt: z.number().int().nonnegative(),
+	updatedAt: z.number().int().nonnegative(),
+});
+
+export const chatSchema = z.object({
+	id: z.string().min(1),
+	title: z.string().min(1),
+	model: z.string().min(1).nullable().default(null),
+	resolvedModel: z.string().min(1).nullable().default(null),
+	modelSource: modelSourceSchema.nullable().default(null),
+	personaId: z.string().min(1),
+	createdAt: z.number().int().nonnegative(),
+	updatedAt: z.number().int().nonnegative(),
+	archived: z.boolean().default(false),
+	params: llmParamsSchema.partial().nullable().default(null),
+});
+
+export const attachmentKindSchema = z.enum(['image', 'document']);
+
+export const attachmentSchema = z.object({
+	id: z.string().min(1),
+	path: z.string().min(1),
+	name: z.string().min(1).default('Attachment'),
+	kind: attachmentKindSchema.default('image'),
+	mime: z.string().min(1),
+	sizeBytes: z.number().int().nonnegative(),
+	width: z.number().int().positive().optional(),
+	height: z.number().int().positive().optional(),
+	title: z.string().nullable().optional(),
+	textPath: z.string().min(1).nullable().optional(),
+	textBytes: z.number().int().nonnegative().nullable().optional(),
+	errorMessage: z.string().nullable().optional(),
+});
+
+export const messageSchema = z.object({
+	id: z.string().min(1),
+	chatId: z.string().min(1),
+	role: messageRoleSchema,
+	content: z.string(),
+	tokensIn: z.number().int().nonnegative().nullable().default(null),
+	tokensOut: z.number().int().nonnegative().nullable().default(null),
+	msToFirst: z.number().int().nonnegative().nullable().default(null),
+	msTotal: z.number().int().nonnegative().nullable().default(null),
+	createdAt: z.number().int().nonnegative(),
+	summarized: z.boolean().default(false),
+	attachmentsJson: z.string().nullable().default(null),
+});
+
+export const appSettingsSchema = z.object({
+	host: z.string().min(1).default(defaultAppSettings.host),
+	port: z.number().int().positive().default(defaultAppSettings.port),
+	data_dir: z.string().min(1).default(defaultAppSettings.data_dir),
+});
+
+export const llmSettingsSchema = z.object({
+	backend: z.literal('ollama').default(defaultLLMSettings.backend),
+	base_url: z.string().min(1).default(defaultLLMSettings.base_url),
+	model: z.string().min(1).default(defaultLLMSettings.model),
+	vision_model: z.string().min(1).default(defaultLLMSettings.vision_model),
+	thinking: z.enum(['off', 'auto', 'light', 'normal', 'extended']).default(defaultLLMSettings.thinking),
+	params: llmParamsSchema.default(defaultLLMParams),
+});
+
+export const webSearchSettingsSchema = z.object({
+	enabled: z.boolean().default(defaultWebSearchSettings.enabled),
+	searxng_url: z.string().default(defaultWebSearchSettings.searxng_url),
+	max_results: z
+		.number()
+		.int()
+		.min(1)
+		.max(10)
+		.default(defaultWebSearchSettings.max_results),
+});
+
+export const memorySettingsSchema = z.object({
+	enabled: z.boolean().default(defaultMemorySettings.enabled),
+	remember: z.string().default(defaultMemorySettings.remember),
+	never_suggest: z.string().default(defaultMemorySettings.never_suggest),
+});
+
+export const settingsSchema = z.object({
+	app: appSettingsSchema.default(defaultAppSettings),
+	llm: llmSettingsSchema.default(defaultLLMSettings),
+	web_search: webSearchSettingsSchema.default(defaultWebSearchSettings),
+	memory: memorySettingsSchema.default(defaultMemorySettings),
+});
+
+export const streamRequestSchema = z.object({
+	content: z.string().trim().min(1),
+	paramsOverride: llmParamsSchema.partial().optional(),
+	attachments: z.array(attachmentSchema).optional(),
+	webSearch: z.boolean().optional().default(false),
+	thinkingMode: z.enum(['off', 'auto', 'light', 'normal', 'extended']).optional(),
+});

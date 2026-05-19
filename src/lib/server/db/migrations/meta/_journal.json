@@ -1,0 +1,48 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1779072039242,
+      "tag": "0000_pink_secret_warriors",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1779072045100,
+      "tag": "0001_add_messages_fts",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1779121463639,
+      "tag": "0002_condemned_the_hand",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1779137993970,
+      "tag": "0003_loose_vulcan",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1779141002538,
+      "tag": "0004_amazing_zodiak",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1747612800000,
+      "tag": "0005_multimodal",
+      "breakpoints": true
+    }
+  ]
+}
