@@ -80,20 +80,32 @@ $effect(() => {
 	if (!userScrolledUp) scrollToBottom();
 });
 
-async function scrollToBottom(): Promise<void> {
+async function scrollToBottom(smooth = false): Promise<void> {
 	await tick();
 	if (!scrollContainer) return;
 
 	const lastIndex = renderItems.length - 1;
 	if (lastIndex < 0) return;
-	$rowVirtualizer.scrollToIndex(lastIndex, { align: 'end' });
+	$rowVirtualizer.scrollToIndex(lastIndex, {
+		align: 'end',
+		behavior: smooth ? 'smooth' : 'auto',
+	});
+	userScrolledUp = false;
 }
 
 function handleScroll(): void {
 	if (!scrollContainer) return;
 	const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
-	userScrolledUp = scrollHeight - scrollTop - clientHeight > 80;
+	// Threshold for pinned-to-bottom
+	const isAtBottom = scrollHeight - scrollTop - clientHeight <= 80;
+	userScrolledUp = !isAtBottom;
 }
+
+$effect(() => {
+	const onScrollBottom = () => scrollToBottom();
+	window.addEventListener('bryon:scroll-bottom', onScrollBottom);
+	return () => window.removeEventListener('bryon:scroll-bottom', onScrollBottom);
+});
 
 function measureItem(
 	node: HTMLDivElement,
@@ -112,7 +124,17 @@ function measureItem(
 
 <div class="list" bind:this={scrollContainer} onscroll={handleScroll}>
 	{#if renderItems.length === 0}
-		<!-- empty: composer is shown by ChatView -->
+		{#if session.currentChatId && !messages.length}
+			<!-- Loading placeholder for chat switch -->
+			<div class="inner loading-placeholder">
+				{#each Array(3) as _}
+					<div class="skeleton-msg">
+						<div class="skeleton-line"></div>
+						<div class="skeleton-line short"></div>
+					</div>
+				{/each}
+			</div>
+		{/if}
 	{:else}
 		<div class="inner" style={`height:${$rowVirtualizer.getTotalSize()}px`}>
 			{#each $rowVirtualizer.getVirtualItems() as virtualRow (virtualRow.key)}
@@ -153,7 +175,13 @@ function measureItem(
 	{/if}
 
 	{#if userScrolledUp && renderItems.length > 6}
-		<button class="anchor" onclick={scrollToBottom} aria-label="Scroll to latest message">&darr;</button>
+		<button
+			class="anchor"
+			onclick={() => scrollToBottom(true)}
+			aria-label="Scroll to latest message"
+		>
+			New messages &darr;
+		</button>
 	{/if}
 </div>
 
@@ -174,6 +202,35 @@ function measureItem(
 	padding: var(--sp-2) var(--sp-6) var(--sp-8);
 }
 
+.loading-placeholder {
+	display: flex;
+	flex-direction: column;
+	gap: var(--sp-6);
+}
+
+.skeleton-msg {
+	display: flex;
+	flex-direction: column;
+	gap: var(--sp-2);
+	max-width: 80%;
+}
+
+.skeleton-line {
+	height: 14px;
+	background: var(--bg-surface-hover);
+	border-radius: 4px;
+	animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.skeleton-line.short {
+	width: 40%;
+}
+
+@keyframes pulse {
+	0%, 100% { opacity: 1; }
+	50% { opacity: .5; }
+}
+
 .virtual-row {
 	position: absolute;
 	top: 0;
@@ -186,12 +243,13 @@ function measureItem(
 	bottom: var(--sp-4);
 	align-self: center;
 	height: 32px;
-	width: 32px;
+	padding: 0 var(--sp-4);
 	border: 1px solid var(--border-default);
-	border-radius: 50%;
+	border-radius: var(--radius-full);
 	background: var(--bg-surface);
 	color: var(--text-muted);
-	font-size: 14px;
+	font-size: 12px;
+	font-weight: 500;
 	cursor: pointer;
 	box-shadow: var(--shadow-md);
 	z-index: 10;

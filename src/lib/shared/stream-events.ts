@@ -77,6 +77,9 @@ export type StreamErrorEvent = z.infer<typeof streamErrorEventSchema>;
 export type NewsArticle = z.infer<typeof newsArticleSchema>;
 export type ArticlesEvent = z.infer<typeof articlesEventSchema>;
 
+import type { NewsArticle } from './stream-events';
+import type { StreamErrorCode } from './types';
+
 export type StreamEvent =
 	| { event: typeof STREAM_EVENT.Token; data: TokenEvent }
 	| { event: typeof STREAM_EVENT.ThinkingToken; data: ThinkingTokenEvent }
@@ -84,6 +87,18 @@ export type StreamEvent =
 	| { event: typeof STREAM_EVENT.Done; data: DoneEvent }
 	| { event: typeof STREAM_EVENT.Error; data: StreamErrorEvent }
 	| { event: typeof STREAM_EVENT.Articles; data: ArticlesEvent };
+
+export type SessionEvent =
+	| { type: 'START'; userMessageId: string }
+	| { type: 'OPEN' }
+	| { type: 'META'; assistantId: string; tokensIn: number; msToFirst: number }
+	| { type: 'TOKEN'; delta: string }
+	| { type: 'THINKING_TOKEN'; delta: string }
+	| { type: 'THINKING_END' }
+	| { type: 'ARTICLES'; items: NewsArticle[] }
+	| { type: 'DONE'; assistantId: string; tokensOut: number; msTotal: number }
+	| { type: 'ERROR'; code: StreamErrorCode; message?: string }
+	| { type: 'ABORT' };
 
 /** Map of event name → schema, for typed lookups on both sides. */
 export const streamEventSchemas = {

@@ -1,6 +1,8 @@
 <script lang="ts">
 import type { SessionMetrics } from '$lib/features/streaming/session.svelte';
 
+import { session } from '$lib/features/streaming/session.svelte';
+
 let {
 	model,
 	streaming = false,
@@ -29,8 +31,15 @@ const ttftLabel = $derived(
 </script>
 
 <div class="status" role="contentinfo" aria-label="Chat status">
-	<span class="item model">{model}</span>
+	<span class="item model" title="Model">{model}</span>
 	<span class="sep">&middot;</span>
+
+	<div class="item health-indicator" title="Ollama Status: {session.ollamaState}">
+		<span class="dot" class:ready={session.ollamaState === 'ready'} class:unreachable={session.ollamaState === 'unreachable'}></span>
+		Ollama
+	</div>
+	<span class="sep">&middot;</span>
+
 	<span class="item">{contextLabel}</span>
 
 	{#if streaming}
@@ -72,6 +81,28 @@ const ttftLabel = $derived(
 	font-family: 'SF Mono', 'JetBrains Mono', ui-monospace, monospace;
 	font-size: 10px;
 	letter-spacing: 0.02em;
+}
+
+.health-indicator {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--text-muted);
+}
+
+.dot.ready {
+	background: var(--green);
+	box-shadow: 0 0 4px var(--green);
+}
+
+.dot.unreachable {
+	background: var(--red);
 }
 
 .sep {

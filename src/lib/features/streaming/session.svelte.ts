@@ -6,6 +6,9 @@ import {
 } from '$lib/shared/stream-events';
 import { invalidate } from '$app/navigation';
 import { consumeSseStream, type StreamHandlers } from './stream-consumer';
+import { errorChannel } from './error-channel.svelte';
+import type { SessionEvent } from '$lib/shared/stream-events';
+import type { StreamPhase, StreamErrorCode } from '$lib/shared/types';
 import {
 	handleSlashCommand,
 	type SlashCommandContext,
@@ -35,7 +38,7 @@ export class Session {
 	chats = $state<Chat[]>([]);
 	currentChatId = $state<string | null>(null);
 	messages = $state<Message[]>([]);
-	streaming = $state(false);
+	phase = $state<StreamPhase>({ kind: 'idle' });
 	streamingContent = $state('');
 	draft = $state('');
 	metrics = $state<SessionMetrics | null>(null);
@@ -52,6 +55,14 @@ export class Session {
 	activeActivityMessageId = $state<string | null>(null);
 	availableModels = $state<string[]>([]);
 	thinkingMode = $state<ThinkingMode>('normal');
+	ollamaState = $state<'unknown' | 'ready' | 'unreachable'>('unknown');
+
+	// Derived states from phase
+	streaming = $derived(
+		this.phase.kind === 'connecting' ||
+			this.phase.kind === 'streaming' ||
+			this.phase.kind === 'thinking',
+	);
 
 	private abortController: AbortController | null = null;
 	private tokensReceived = 0;
@@ -73,7 +84,48 @@ export class Session {
 		if (input.settings) this.settings = input.settings;
 		if ('ollamaReachable' in input) {
 			this.ollamaReachable = input.ollamaReachable ?? true;
+			this.ollamaState = this.ollamaReachable ? 'ready' : 'unreachable';
 		}
+		this.startHealthPolling();
+	}
+
+	private healthInterval: number | null = null;
+	private startHealthPolling(): void {
+		if (typeof window === 'undefined' || this.healthInterval) return;
+
+		const poll = async () => {
+			const wasReachable = this.ollamaReachable;
+			try {
+				const response = await fetch('/api/health');
+				if (response.ok) {
+					const data = await response.json();
+					this.ollamaState = data.ollama;
+					this.ollamaReachable = data.ollama === 'ready';
+				}
+			} catch {
+				this.ollamaState = 'unreachable';
+				this.ollamaReachable = false;
+			}
+
+			if (wasReachable && !this.ollamaReachable) {
+				errorChannel.push({
+					code: 'OLLAMA_UNREACHABLE',
+					message: 'Ollama is unreachable. Make sure the daemon is running.',
+					severity: 'error',
+					type: 'system',
+				});
+			} else if (!wasReachable && this.ollamaReachable) {
+				errorChannel.push({
+					code: 'OLLAMA_REACHABLE',
+					message: 'Ollama is back online.',
+					severity: 'info',
+					type: 'system',
+				});
+			}
+		};
+
+		void poll();
+		this.healthInterval = window.setInterval(poll, 10000);
 	}
 
 	resetComposer(): void {
@@ -83,7 +135,7 @@ export class Session {
 		this.streamingThinkingDurationMs = 0;
 		this.streamingThinkingStartedAt = null;
 		this.streamingThinkingFrozen = false;
-		this.streaming = false;
+		this.phase = { kind: 'idle' };
 	}
 
 	openActivityFor(messageId: string): void {
@@ -113,7 +165,9 @@ export class Session {
 		if (!trimmed) return;
 		const attachments = options.attachments ?? [];
 
-		this.streaming = true;
+		const userMessageId = `temp-${Date.now()}`;
+		this.transition({ type: 'START', userMessageId });
+
 		this.streamingContent = '';
 		this.streamingThinking = '';
 		this.streamingThinkingDurationMs = 0;
@@ -128,7 +182,7 @@ export class Session {
 		};
 
 		const userMessage: Message = {
-			id: `temp-${Date.now()}`,
+			id: userMessageId,
 			chatId,
 			role: 'user',
 			content: trimmed,
@@ -142,6 +196,11 @@ export class Session {
 		};
 		this.messages = [...this.messages, userMessage];
 		this.draft = '';
+
+		// Pre-scroll so user message is visible
+		if (typeof window !== 'undefined') {
+			window.dispatchEvent(new CustomEvent('bryon:scroll-bottom'));
+		}
 
 		const abortController = new AbortController();
 		this.abortController = abortController;
@@ -161,28 +220,31 @@ export class Session {
 
 			if (!response.ok || !response.body) {
 				const errorData = await response.json().catch(() => null);
-				const code: string =
-					errorData?.error?.code ?? STREAM_ERROR_CODE.StreamInterrupted;
+				const code =
+					(errorData?.error?.code as StreamErrorCode) ??
+					STREAM_ERROR_CODE.StreamInterrupted;
 				const message: string =
 					errorData?.error?.message ?? `HTTP ${response.status}`;
+				this.transition({ type: 'ERROR', code, message });
 				this.appendErrorMessage(chatId, { code, message });
 				return;
 			}
 
+			this.transition({ type: 'OPEN' });
 			await this.consumeSSE(response.body, chatId);
 		} catch (error) {
 			if ((error as Error).name === 'AbortError') {
+				this.transition({ type: 'ABORT' });
 				// Server is the source of truth for the partial assistant
 				// message — refetch instead of synthesizing a local row.
 				void invalidate(MESSAGES_INVALIDATION_KEY);
 			} else {
-				this.appendErrorMessage(chatId, {
-					code: STREAM_ERROR_CODE.StreamInterrupted,
-					message: (error as Error).message || 'Stream failed.',
-				});
+				const code = STREAM_ERROR_CODE.StreamInterrupted as StreamErrorCode;
+				const message = (error as Error).message || 'Stream failed.';
+				this.transition({ type: 'ERROR', code, message });
+				this.appendErrorMessage(chatId, { code, message });
 			}
 		} finally {
-			this.streaming = false;
 			this.streamingContent = '';
 			this.abortController = null;
 		}
@@ -207,6 +269,7 @@ export class Session {
 	cancel(): void {
 		if (this.abortController) {
 			this.abortController.abort();
+			this.transition({ type: 'ABORT' });
 		}
 	}
 
@@ -298,6 +361,7 @@ export class Session {
 		const handlers: StreamHandlers = {
 			getCurrentChatId: () => this.currentChatId,
 			onThinkingToken: (data) => {
+				this.transition({ type: 'THINKING_TOKEN', delta: data.delta });
 				if (this.streamingThinkingStartedAt === null) {
 					this.streamingThinkingStartedAt = performance.now();
 				}
@@ -307,7 +371,8 @@ export class Session {
 						performance.now() - this.streamingThinkingStartedAt;
 				}
 			},
-			onToken: () => {
+			onToken: (data) => {
+				this.transition({ type: 'TOKEN', delta: data.delta });
 				// First real token: freeze the thinking duration.
 				if (
 					!this.streamingThinkingFrozen &&
@@ -323,6 +388,12 @@ export class Session {
 				this.streamingContent += combined;
 			},
 			onMeta: (data) => {
+				this.transition({
+					type: 'META',
+					assistantId: data.assistantId,
+					tokensIn: data.tokensIn,
+					msToFirst: data.msToFirst,
+				});
 				this.metrics = {
 					tps: 0,
 					ttft: data.msToFirst,
@@ -332,6 +403,12 @@ export class Session {
 				};
 			},
 			onDone: (data) => {
+				this.transition({
+					type: 'DONE',
+					assistantId: data.id,
+					tokensOut: data.tokensOut || this.tokensReceived,
+					msTotal: data.msTotal,
+				});
 				const tokensOut = data.tokensOut || this.tokensReceived;
 				const msTotal = data.msTotal;
 				this.metrics = {
@@ -386,9 +463,12 @@ export class Session {
 				void this.refreshChatList();
 			},
 			onError: (data) => {
+				const code = data.code as StreamErrorCode;
+				this.transition({ type: 'ERROR', code, message: data.message });
 				this.appendErrorMessage(chatId, data);
 			},
 			onArticles: (data) => {
+				this.transition({ type: 'ARTICLES', items: data.articles });
 				const next = new Map(this.articlesByMessageId);
 				next.set(data.messageId, data.articles);
 				this.articlesByMessageId = next;
@@ -396,6 +476,87 @@ export class Session {
 		};
 
 		await consumeSseStream(body, chatId, handlers);
+	}
+
+	transition(event: SessionEvent): void {
+		const prev = this.phase;
+		switch (this.phase.kind) {
+			case 'idle':
+				if (event.type === 'START') {
+					this.phase = { kind: 'connecting', userMessageId: event.userMessageId };
+				}
+				break;
+			case 'connecting':
+				if (event.type === 'OPEN') {
+					// wait for META to know assistantId
+				} else if (event.type === 'META') {
+					this.phase = {
+						kind: 'streaming',
+						userMessageId: this.phase.userMessageId,
+						assistantId: event.assistantId,
+						startedAt: Date.now(),
+					};
+				} else if (event.type === 'ERROR') {
+					this.phase = { kind: 'error', code: event.code, message: event.message };
+				} else if (event.type === 'ABORT') {
+					this.phase = { kind: 'aborted' };
+				}
+				break;
+			case 'streaming':
+				if (event.type === 'THINKING_TOKEN') {
+					this.phase = {
+						kind: 'thinking',
+						userMessageId: this.phase.userMessageId,
+						assistantId: this.phase.assistantId,
+					};
+				} else if (event.type === 'DONE') {
+					this.phase = { kind: 'done', assistantId: event.assistantId };
+				} else if (event.type === 'ERROR') {
+					this.phase = {
+						kind: 'error',
+						code: event.code,
+						message: event.message,
+						assistantId: this.phase.assistantId,
+					};
+				} else if (event.type === 'ABORT') {
+					this.phase = { kind: 'aborted', assistantId: this.phase.assistantId };
+				}
+				break;
+			case 'thinking':
+				if (event.type === 'TOKEN') {
+					this.phase = {
+						kind: 'streaming',
+						userMessageId: this.phase.userMessageId,
+						assistantId: this.phase.assistantId,
+						startedAt: Date.now(), // approximation
+					};
+				} else if (event.type === 'THINKING_END') {
+					// optional hint, usually TOKEN happens
+				} else if (event.type === 'DONE') {
+					this.phase = { kind: 'done', assistantId: event.assistantId };
+				} else if (event.type === 'ERROR') {
+					this.phase = {
+						kind: 'error',
+						code: event.code,
+						message: event.message,
+						assistantId: this.phase.assistantId,
+					};
+				} else if (event.type === 'ABORT') {
+					this.phase = { kind: 'aborted', assistantId: this.phase.assistantId };
+				}
+				break;
+			case 'error':
+			case 'aborted':
+			case 'done':
+				if (event.type === 'START') {
+					this.phase = { kind: 'connecting', userMessageId: event.userMessageId };
+				}
+				break;
+		}
+
+		if (prev.kind !== this.phase.kind) {
+			console.debug(`[session] phase: ${prev.kind} -> ${this.phase.kind}`, { event });
+		}
 	}
 
 	private appendErrorMessage(

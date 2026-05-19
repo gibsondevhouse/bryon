@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, asc, desc, eq, inArray, lt } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, lt, sql } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import {
 	chatSchema,
@@ -62,7 +62,31 @@ export type CreateMessageInput = {
 };
 
 export class ChatService {
-	constructor(private readonly db: Db = getDb()) {}
+	private static listMessagesStmt: any = null;
+
+	constructor(private readonly db: Db = getDb()) {
+		this.initPreparedStatements();
+	}
+
+	private initPreparedStatements() {
+		if (ChatService.listMessagesStmt || !this.hasAttachmentsColumn()) return;
+		try {
+			ChatService.listMessagesStmt = this.db
+				.select()
+				.from(messages)
+				.where(
+					and(
+						eq(messages.chatId, sql.placeholder('chatId')),
+						lt(messages.createdAt, sql.placeholder('beforeCreatedAt')),
+					),
+				)
+				.orderBy(desc(messages.createdAt))
+				.limit(sql.placeholder('limit'))
+				.prepare('listMessages');
+		} catch (error) {
+			console.warn('Failed to prepare listMessages statement:', error);
+		}
+	}
 
 	list(input: ListChatsInput = {}): Chat[] {
 		const limit = normalizeLimit(input.limit, 50, 200);
@@ -170,32 +194,31 @@ export class ChatService {
 
 	listMessages(chatId: string, input: ListMessagesInput = {}): Message[] {
 		const limit = normalizeLimit(input.limit, 100, 500);
-		if (!hasAttachmentsColumn()) {
+		if (!this.hasAttachmentsColumn()) {
 			return this.listMessagesCompat(chatId, input);
 		}
 
 		try {
-			const rows =
-				input.beforeCreatedAt === undefined
-					? this.db
-							.select()
-							.from(messages)
-							.where(eq(messages.chatId, chatId))
-							.orderBy(desc(messages.createdAt))
-							.limit(limit)
-							.all()
-					: this.db
-							.select()
-							.from(messages)
-							.where(
-								and(
-									eq(messages.chatId, chatId),
-									lt(messages.createdAt, input.beforeCreatedAt),
-								),
-							)
-							.orderBy(desc(messages.createdAt))
-							.limit(limit)
-							.all();
+			if (input.beforeCreatedAt === undefined) {
+				const rows = this.db
+					.select()
+					.from(messages)
+					.where(eq(messages.chatId, chatId))
+					.orderBy(desc(messages.createdAt))
+					.limit(limit)
+					.all();
+				return rows.reverse().map(toMessage);
+			}
+
+			if (!ChatService.listMessagesStmt) {
+				return this.listMessagesCompat(chatId, input);
+			}
+
+			const rows = ChatService.listMessagesStmt.all({
+				chatId,
+				beforeCreatedAt: input.beforeCreatedAt,
+				limit,
+			});
 
 			return rows.reverse().map(toMessage);
 		} catch (error) {
@@ -222,7 +245,7 @@ export class ChatService {
 				msTotal: input.msTotal ?? null,
 				createdAt,
 				summarized: input.summarized ? 1 : 0,
-				...(hasAttachmentsColumn()
+				...(this.hasAttachmentsColumn()
 					? { attachmentsJson: input.attachmentsJson ?? null }
 					: {}),
 			};
@@ -262,7 +285,7 @@ export class ChatService {
 	}
 
 	getMessage(id: string): Message | null {
-		if (!hasAttachmentsColumn()) {
+		if (!this.hasAttachmentsColumn()) {
 			return this.getMessageCompat(id);
 		}
 
@@ -367,6 +390,20 @@ export class ChatService {
 
 		return row ? toMessage(row) : null;
 	}
+
+	private hasAttachmentsColumn(): boolean {
+		if (supportsAttachmentsColumn !== null) return supportsAttachmentsColumn;
+		try {
+			const rows = getSqlite()
+				.prepare('PRAGMA table_info("messages")')
+				.all() as Array<{ name: string }>;
+			supportsAttachmentsColumn = rows.some((row) => row.name === 'attachments_json');
+			return supportsAttachmentsColumn;
+		} catch {
+			supportsAttachmentsColumn = false;
+			return false;
+		}
+	}
 }
 
 function toChat(row: ChatRow): Chat {
@@ -405,19 +442,6 @@ function normalizeLimit(
 	return Math.min(Math.max(1, value), maxValue);
 }
 
-function hasAttachmentsColumn(): boolean {
-	if (supportsAttachmentsColumn !== null) return supportsAttachmentsColumn;
-	try {
-		const rows = getSqlite()
-			.prepare('PRAGMA table_info("messages")')
-			.all() as Array<{ name: string }>;
-		supportsAttachmentsColumn = rows.some((row) => row.name === 'attachments_json');
-		return supportsAttachmentsColumn;
-	} catch {
-		supportsAttachmentsColumn = false;
-		return false;
-	}
-}
 
 function isMissingAttachmentsColumnError(error: unknown): boolean {
 	return (

@@ -22,6 +22,8 @@ export function openDatabase(path = defaultDbPath): Database.Database {
 	connection.pragma('journal_mode = WAL');
 	connection.pragma('synchronous = NORMAL');
 	connection.pragma('foreign_keys = ON');
+	connection.pragma('mmap_size = 268435456'); // 256MB
+	connection.pragma('cache_size = -16384'); // 16MB
 
 	return connection;
 }
