@@ -1,5 +1,5 @@
 import { relations } from 'drizzle-orm';
-import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 export const personas = sqliteTable('personas', {
 	id: text('id').primaryKey(),
@@ -12,36 +12,50 @@ export const personas = sqliteTable('personas', {
 	updatedAt: integer('updated_at').notNull(),
 });
 
-export const chats = sqliteTable('chats', {
-	id: text('id').primaryKey(),
-	title: text('title').notNull(),
-	model: text('model'),
-	personaId: text('persona_id')
-		.notNull()
-		.references(() => personas.id),
-	createdAt: integer('created_at').notNull(),
-	updatedAt: integer('updated_at').notNull(),
-	archived: integer('archived').notNull().default(0),
-	paramsJson: text('params_json'),
-});
+export const chats = sqliteTable(
+	'chats',
+	{
+		id: text('id').primaryKey(),
+		title: text('title').notNull(),
+		model: text('model'),
+		personaId: text('persona_id')
+			.notNull()
+			.references(() => personas.id),
+		createdAt: integer('created_at').notNull(),
+		updatedAt: integer('updated_at').notNull(),
+		archived: integer('archived').notNull().default(0),
+		paramsJson: text('params_json'),
+	},
+	(t) => [
+		// Compound index matches `WHERE archived = ? ORDER BY updated_at DESC`
+		index('idx_chats_archived_updated_at').on(t.archived, t.updatedAt),
+	],
+);
 
-export const messages = sqliteTable('messages', {
-	id: text('id').primaryKey(),
-	chatId: text('chat_id')
-		.notNull()
-		.references(() => chats.id, { onDelete: 'cascade' }),
-	role: text('role', {
-		enum: ['system', 'user', 'assistant', 'tool_call', 'tool_result'],
-	}).notNull(),
-	content: text('content').notNull(),
-	tokensIn: integer('tokens_in'),
-	tokensOut: integer('tokens_out'),
-	msToFirst: integer('ms_to_first'),
-	msTotal: integer('ms_total'),
-	createdAt: integer('created_at').notNull(),
-	summarized: integer('summarized').notNull().default(0),
-	attachmentsJson: text('attachments_json'),
-});
+export const messages = sqliteTable(
+	'messages',
+	{
+		id: text('id').primaryKey(),
+		chatId: text('chat_id')
+			.notNull()
+			.references(() => chats.id, { onDelete: 'cascade' }),
+		role: text('role', {
+			enum: ['system', 'user', 'assistant', 'tool_call', 'tool_result'],
+		}).notNull(),
+		content: text('content').notNull(),
+		tokensIn: integer('tokens_in'),
+		tokensOut: integer('tokens_out'),
+		msToFirst: integer('ms_to_first'),
+		msTotal: integer('ms_total'),
+		createdAt: integer('created_at').notNull(),
+		summarized: integer('summarized').notNull().default(0),
+		attachmentsJson: text('attachments_json'),
+	},
+	(t) => [
+		// Supports `WHERE chat_id = ? ORDER BY created_at DESC` in listMessages()
+		index('idx_messages_chat_id').on(t.chatId),
+	],
+);
 
 export const settings = sqliteTable('settings', {
 	key: text('key').primaryKey(),
@@ -55,29 +69,41 @@ export const kbCollections = sqliteTable('kb_collections', {
 	createdAt: integer('created_at').notNull(),
 });
 
-export const kbDocuments = sqliteTable('kb_documents', {
-	id: text('id').primaryKey(),
-	collectionId: text('collection_id')
-		.notNull()
-		.references(() => kbCollections.id, { onDelete: 'cascade' }),
-	path: text('path').notNull(),
-	hash: text('hash').notNull(),
-	mime: text('mime').notNull(),
-	title: text('title'),
-	ingestedAt: integer('ingested_at'),
-	errorMessage: text('error_message'),
-});
+export const kbDocuments = sqliteTable(
+	'kb_documents',
+	{
+		id: text('id').primaryKey(),
+		collectionId: text('collection_id')
+			.notNull()
+			.references(() => kbCollections.id, { onDelete: 'cascade' }),
+		path: text('path').notNull(),
+		hash: text('hash').notNull(),
+		mime: text('mime').notNull(),
+		title: text('title'),
+		ingestedAt: integer('ingested_at'),
+		errorMessage: text('error_message'),
+	},
+	(t) => [
+		index('idx_kb_documents_collection_id').on(t.collectionId),
+	],
+);
 
-export const kbChunks = sqliteTable('kb_chunks', {
-	id: text('id').primaryKey(),
-	documentId: text('document_id')
-		.notNull()
-		.references(() => kbDocuments.id, { onDelete: 'cascade' }),
-	ordinal: integer('ordinal').notNull(),
-	page: integer('page'),
-	tokenCount: integer('token_count').notNull(),
-	text: text('text').notNull(),
-});
+export const kbChunks = sqliteTable(
+	'kb_chunks',
+	{
+		id: text('id').primaryKey(),
+		documentId: text('document_id')
+			.notNull()
+			.references(() => kbDocuments.id, { onDelete: 'cascade' }),
+		ordinal: integer('ordinal').notNull(),
+		page: integer('page'),
+		tokenCount: integer('token_count').notNull(),
+		text: text('text').notNull(),
+	},
+	(t) => [
+		index('idx_kb_chunks_document_id').on(t.documentId),
+	],
+);
 
 export const personasRelations = relations(personas, ({ many }) => ({
 	chats: many(chats),

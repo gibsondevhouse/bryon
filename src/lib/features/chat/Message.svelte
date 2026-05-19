@@ -7,8 +7,7 @@ import MessageActions from './MessageActions.svelte';
 import MessageMeta from './primitives/MessageMeta.svelte';
 import ArticlesCarousel from './ArticlesCarousel.svelte';
 import { sanitizeAssistantHtml } from './sanitize';
-import { enhanceCodeBlocks } from './code-enhancer';
-import ThinkingChip from './ThinkingChip.svelte';
+import { enhanceCodeBlocks } from './code-enhancer';	import { stabilizeMarkdown } from './streaming-markdown';import ThinkingChip from './ThinkingChip.svelte';
 import { session } from '$lib/features/streaming/session.svelte';
 
 let {
@@ -57,7 +56,8 @@ const isCancelled = $derived(
 const renderedHtml = $derived.by(() => {
 	if (!content) return '';
 	if (role === 'user') return escapeHtml(content);
-	const html = marked.parse(content, { async: false, breaks: true }) as string;
+	const source = isStreaming ? stabilizeMarkdown(content) : content;
+	const html = marked.parse(source, { async: false, breaks: true }) as string;
 	return sanitizeAssistantHtml(html);
 });
 

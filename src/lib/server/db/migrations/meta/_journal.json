@@ -43,6 +43,13 @@
       "when": 1747612800000,
       "tag": "0005_multimodal",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1779219154786,
+      "tag": "0006_fixed_mole_man",
+      "breakpoints": true
     }
   ]
 }

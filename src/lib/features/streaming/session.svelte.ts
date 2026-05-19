@@ -402,6 +402,10 @@ export class Session {
 		chatId: string,
 		err: StreamErrorEvent,
 	): void {
+		// User-initiated cancellation — no error message needed
+		if (err.code === STREAM_ERROR_CODE.Aborted) return;
+
+		const title = this.errorTitle(err);
 		const hint = this.errorHint(err);
 		this.messages = [
 			...this.messages,
@@ -409,7 +413,7 @@ export class Session {
 				id: `error-${Date.now()}`,
 				chatId,
 				role: 'assistant',
-				content: `**Error (${err.code}):** ${err.message}${hint}`,
+				content: `**${title}:** ${err.message}${hint}`,
 				tokensIn: null,
 				tokensOut: null,
 				msToFirst: null,
@@ -422,23 +426,60 @@ export class Session {
 		this.streamingContent = '';
 	}
 
+	private errorTitle(err: StreamErrorEvent): string {
+		switch (err.code) {
+			case STREAM_ERROR_CODE.ModelNotFound:
+				return 'Model not found';
+			case STREAM_ERROR_CODE.ModelNotVision:
+				return 'Vision not available';
+			case STREAM_ERROR_CODE.StreamInterrupted:
+				return 'Connection dropped';
+			case STREAM_ERROR_CODE.OllamaError:
+				return this.isConnectionError(err.message)
+					? "Ollama isn't running"
+					: 'Ollama error';
+			case STREAM_ERROR_CODE.WebSearchDisabled:
+				return 'Web search disabled';
+			case STREAM_ERROR_CODE.WebSearchFailed:
+				return 'Web search failed';
+			default:
+				return 'Error';
+		}
+	}
+
+	private isConnectionError(message: string): boolean {
+		const lower = message.toLowerCase();
+		return (
+			lower.includes('econnrefused') ||
+			lower.includes('failed to fetch') ||
+			lower.includes('networkerror') ||
+			lower.includes('fetch failed') ||
+			lower.includes('connection refused')
+		);
+	}
+
 	private errorHint(err: StreamErrorEvent): string {
 		if (err.code === STREAM_ERROR_CODE.ModelNotFound && err.model) {
-			return `\n\nAction: Run \`ollama pull ${err.model}\`, then click **Retry**.`;
+			return `\n\nRun \`ollama pull ${err.model}\`, then click **Retry**.`;
 		}
-		if (err.code === 'MODEL_NOT_VISION') {
-			return '\n\nAction: Set the vision model in Settings to a vision-capable Ollama model, then click **Retry**.';
+		if (err.code === STREAM_ERROR_CODE.ModelNotVision) {
+			return '\n\nSet the vision model in Settings to a vision-capable model, then click **Retry**.';
 		}
-		if (err.code === 'WEB_SEARCH_DISABLED') {
-			return '\n\nAction: Enable web lookup in Settings or send again with web lookup off.';
+		if (err.code === STREAM_ERROR_CODE.StreamInterrupted) {
+			return '\n\nYour partial answer was saved. Click **Retry** to continue.';
 		}
-		if (err.code === 'WEB_SEARCH_FAILED') {
-			return '\n\nAction: Check the SearXNG URL in Settings or send again without web lookup.';
+		if (err.code === STREAM_ERROR_CODE.OllamaError) {
+			return this.isConnectionError(err.message)
+				? '\n\nRun `ollama serve` to start the daemon, then click **Retry**.'
+				: '\n\nClick **Retry** or restart Ollama.';
 		}
-		if (err.code === STREAM_ERROR_CODE.Aborted) {
-			return '\n\nAction: Click **Retry** when ready.';
+		if (err.code === STREAM_ERROR_CODE.WebSearchDisabled) {
+			return '\n\nEnable web lookup in Settings or send again with web lookup off.';
 		}
-		return '\n\nAction: Ensure `ollama serve` is running, then click **Retry**.';
+		if (err.code === STREAM_ERROR_CODE.WebSearchFailed) {
+			return '\n\nCheck the SearXNG URL in Settings or send again without web lookup.';
+		}
+		return '\n\nRun `ollama serve` to start the daemon, then click **Retry**.';
 	}
 }
 

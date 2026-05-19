@@ -182,9 +182,12 @@ async function searchGoogleNewsRss(input: {
 	const xml = await response.text();
 	const results: WebSearchResult[] = [];
 	const itemRegex = /<item>([\s\S]*?)<\/item>/g;
-	let match: RegExpExecArray | null;
 
-	while ((match = itemRegex.exec(xml)) !== null && results.length < input.maxResults) {
+	for (
+		let match = itemRegex.exec(xml);
+		match !== null && results.length < input.maxResults;
+		match = itemRegex.exec(xml)
+	) {
 		const item = match[1];
 		const link = extractRssField(item, 'link');
 		if (!link?.startsWith('http')) continue;
