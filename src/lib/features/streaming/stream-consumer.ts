@@ -20,11 +20,16 @@ export type StreamHandlers = {
 	/** The chat id that should still be receiving updates. */
 	getCurrentChatId(): string | null;
 	/** Fires for every token event; intended for counter bookkeeping. */
-	onToken(): void;
+	onToken(data: { delta: string }): void;
 	/** Fires for every thinking_token event. */
 	onThinkingToken(data: ThinkingTokenEvent): void;
 	/** Fires for the single `meta` event. */
-	onMeta(data: { msToFirst: number; tokensIn: number }): void;
+	onMeta(data: {
+		assistantId: string;
+		requestId: string;
+		msToFirst: number;
+		tokensIn: number;
+	}): void;
 	/** Fires when the batcher releases buffered token text. */
 	onAppend(combined: string): void;
 	/** Fires for `done`. The batcher has been flushed before this. */
@@ -42,6 +47,15 @@ export async function consumeSseStream(
 ): Promise<void> {
 	const decoder = new TextDecoder();
 	const reader = body.getReader();
+	let lastByteAt = Date.now();
+	const READ_TIMEOUT_MS = 15000;
+
+	const timeoutCheck = setInterval(() => {
+		if (Date.now() - lastByteAt > READ_TIMEOUT_MS) {
+			reader.cancel('READ_TIMEOUT').catch(() => {});
+		}
+	}, 2000);
+
 	const parser = createSseParser({
 		onMalformed: (event, raw) => {
 			console.warn('Dropped malformed SSE event', event, raw);
@@ -64,13 +78,18 @@ export async function consumeSseStream(
 				break;
 			}
 			case STREAM_EVENT.Token: {
-				handlers.onToken();
+				handlers.onToken(event.data);
 				batcher.push(event.data.delta);
 				break;
 			}
 			case STREAM_EVENT.Meta: {
 				if (!isCurrentChat) break;
-				handlers.onMeta(event.data);
+			handlers.onMeta({
+				assistantId: event.data.assistantId,
+				msToFirst: event.data.msToFirst,
+				tokensIn: event.data.tokensIn,
+				requestId: event.data.requestId,
+			});
 				break;
 			}
 			case STREAM_EVENT.Done: {
@@ -97,11 +116,13 @@ export async function consumeSseStream(
 		while (true) {
 			const { done, value } = await reader.read();
 			if (done) break;
+			lastByteAt = Date.now();
 			const chunk = decoder.decode(value, { stream: true });
 			for (const event of parser.feed(chunk)) dispatch(event);
 		}
 		for (const event of parser.flush()) dispatch(event);
 	} finally {
+		clearInterval(timeoutCheck);
 		batcher.flush();
 		batcher.dispose();
 		reader.releaseLock();

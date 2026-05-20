@@ -1,13 +1,14 @@
 <script lang="ts">
-import { marked } from 'marked';
-import { RotateCcw, Bot, FileText } from '@lucide/svelte';
+import { RotateCcw } from '@lucide/svelte';
 import type { Attachment, Message } from '$lib/shared/types';
 import type { NewsArticle } from '$lib/shared/stream-events';
 import MessageActions from './MessageActions.svelte';
 import MessageMeta from './primitives/MessageMeta.svelte';
 import ArticlesCarousel from './ArticlesCarousel.svelte';
-import { sanitizeAssistantHtml } from './sanitize';
-import { enhanceCodeBlocks } from './code-enhancer';	import { stabilizeMarkdown } from './streaming-markdown';import ThinkingChip from './ThinkingChip.svelte';
+import ThinkingChip from './ThinkingChip.svelte';
+import MessageHeader from './MessageHeader.svelte';
+import AssistantMarkdown from './AssistantMarkdown.svelte';
+import UserMessage from './UserMessage.svelte';
 import { session } from '$lib/features/streaming/session.svelte';
 
 let {
@@ -30,7 +31,6 @@ let {
 
 function openActivity(): void {
 	if (isStreaming) {
-		// For the streaming placeholder, use a stable virtual id
 		session.openActivityFor('streaming');
 		return;
 	}
@@ -53,14 +53,6 @@ const isCancelled = $derived(
 		message.content.length > 0,
 );
 
-const renderedHtml = $derived.by(() => {
-	if (!content) return '';
-	if (role === 'user') return escapeHtml(content);
-	const source = isStreaming ? stabilizeMarkdown(content) : content;
-	const html = marked.parse(source, { async: false, breaks: true }) as string;
-	return sanitizeAssistantHtml(html);
-});
-
 const timestamp = $derived.by(() => {
 	if (isStreaming || !message?.createdAt) return null;
 	const d = new Date(message.createdAt);
@@ -75,14 +67,6 @@ const timestamp = $derived.by(() => {
 	return { short: time, full };
 });
 
-function escapeHtml(text: string): string {
-	return text
-		.replace(/&/g, '&amp;')
-		.replace(/</g, '&lt;')
-		.replace(/>/g, '&gt;')
-		.replace(/\n/g, '<br>');
-}
-
 const attachments = $derived.by((): Attachment[] => {
 	const json = isStreaming ? null : (message?.attachmentsJson ?? null);
 	if (!json) return [];
@@ -92,8 +76,6 @@ const attachments = $derived.by((): Attachment[] => {
 		return [];
 	}
 });
-const imageAttachments = $derived(attachments.filter((att) => att.kind === 'image'));
-const documentAttachments = $derived(attachments.filter((att) => att.kind === 'document'));
 
 let lightboxSrc = $state<string | null>(null);
 
@@ -109,78 +91,36 @@ function handleLightboxClick(event: MouseEvent): void {
 function handleLightboxKeydown(event: KeyboardEvent): void {
 	if (event.key === 'Escape') closeLightbox();
 }
-
-let proseEl: HTMLDivElement | undefined = $state();
-
-$effect(() => {
-	// Re-run on content changes; only enhance once finalized (skip during streaming).
-	void renderedHtml;
-	if (!proseEl) return;
-	if (isStreaming) return;
-	if (role !== 'assistant') return;
-	void enhanceCodeBlocks(proseEl);
-});
 </script>
 
 {#if role === 'system' || role === 'tool_call' || role === 'tool_result'}
 	<!-- hidden -->
 {:else if role === 'user'}
-	<div class="msg msg-user">
-		{#if imageAttachments.length > 0}
-			<div class="msg-images">
-				{#each imageAttachments as att (att.id)}
-					<button
-						class="msg-img-btn"
-						onclick={() => openLightbox(`/api/chats/image?path=${encodeURIComponent(att.path)}`)}
-						title="View full size"
-						aria-label="View image"
-					>
-						<img
-							src="/api/chats/image?path={encodeURIComponent(att.path)}"
-							alt="Attachment preview"
-							class="msg-img"
-						/>
-					</button>
-				{/each}
-			</div>
-		{/if}
-		{#if documentAttachments.length > 0}
-			<div class="msg-docs">
-				{#each documentAttachments as att (att.id)}
-					<div class="msg-doc" title={att.name}>
-						<FileText size={14} />
-						<span>{att.title ?? att.name}</span>
-					</div>
-				{/each}
-			</div>
-		{/if}
-		<div class="user-bubble">
-			<div class="prose">{@html renderedHtml}</div>
-		</div>
+	<article class="msg-container" role="article" aria-label="Message from user">
+		<UserMessage {content} {attachments} onOpenLightbox={openLightbox} />
 		{#if timestamp}
-			<time class="ts ts-user" datetime={new Date(message?.createdAt ?? 0).toISOString()} title={timestamp.full}>
-				<MessageMeta value={timestamp.short} kind="timestamp" />
-			</time>
+			<div class="msg-user">
+				<time class="ts ts-user" datetime={new Date(message?.createdAt ?? 0).toISOString()} title={timestamp.full}>
+					<MessageMeta value={timestamp.short} kind="timestamp" />
+				</time>
+			</div>
 		{/if}
-	</div>
 
-	{#if lightboxSrc}
-		<dialog
-			class="lightbox"
-			open
-			onclick={handleLightboxClick}
-			onkeydown={handleLightboxKeydown}
-			aria-label="Image preview"
-		>
-			<img src={lightboxSrc} alt="Full-size preview" class="lightbox-img" />
-		</dialog>
-	{/if}
+		{#if lightboxSrc}
+			<dialog
+				class="lightbox"
+				open
+				onclick={handleLightboxClick}
+				onkeydown={handleLightboxKeydown}
+				aria-label="Image preview"
+			>
+				<img src={lightboxSrc} alt="Full-size preview" class="lightbox-img" />
+			</dialog>
+		{/if}
+	</article>
 {:else}
-	<div class="msg msg-assistant" class:streaming={isStreaming}>
-		<div class="assistant-label">
-			<span class="bot-icon"><Bot size={14} strokeWidth={2} /></span>
-			<span>Bryon</span>
-		</div>
+	<article class="msg msg-assistant" class:streaming={isStreaming} role="article" aria-label="Message from Bryon">
+		<MessageHeader />
 
 		<div class="assistant-body">
 			{#if thinking || isStreaming}
@@ -193,7 +133,7 @@ $effect(() => {
 			{/if}
 
 			{#if content}
-				<div class="prose" bind:this={proseEl}>{@html renderedHtml}</div>
+				<AssistantMarkdown {content} {isStreaming} />
 			{:else if isStreaming}
 				<span class="dots"><span></span><span></span><span></span></span>
 			{/if}
@@ -229,7 +169,7 @@ $effect(() => {
 				{/if}
 			{/if}
 		</div>
-	</div>
+	</article>
 {/if}
 
 <style>

@@ -10,6 +10,7 @@ import ShortcutsModal from '$lib/features/chat/ShortcutsModal.svelte';
 import ChatSwitcher from '$lib/features/chat/ChatSwitcher.svelte';
 import SearchPanel from '$lib/features/chat/SearchPanel.svelte';
 import ActivityPanel from '$lib/features/chat/ActivityPanel.svelte';
+import ToastContainer from '$lib/components/ToastContainer.svelte';
 import { session } from '$lib/features/streaming/session.svelte';
 
 let { data, children } = $props();
@@ -202,6 +203,7 @@ function onGlobalKey(e: KeyboardEvent): void {
 <ShortcutsModal bind:open={shortcutsOpen} />
 <ChatSwitcher bind:open={switcherOpen} chats={data.chats} />
 <SearchPanel bind:open={searchOpen} />
+<ToastContainer />
 
 <style>
 /* ── Shell ── */

@@ -11,7 +11,16 @@ import {
 describe('stream event schemas', () => {
 	it('validates token/meta/done/error payloads', () => {
 		expect(tokenEventSchema.parse({ delta: 'Hi' })).toEqual({ delta: 'Hi' });
-		expect(metaEventSchema.parse({ msToFirst: 10, tokensIn: 20 })).toEqual({
+		expect(
+			metaEventSchema.parse({
+				assistantId: 'a1',
+				requestId: 'r1',
+				msToFirst: 10,
+				tokensIn: 20,
+			}),
+		).toEqual({
+			assistantId: 'a1',
+			requestId: 'r1',
 			msToFirst: 10,
 			tokensIn: 20,
 		});
@@ -31,7 +40,14 @@ describe('stream event schemas', () => {
 			event: STREAM_EVENT.Token,
 			data: { delta: 'Hi' },
 		});
-		expect(parseStreamEvent(STREAM_EVENT.Meta, { msToFirst: 1, tokensIn: 2 })?.event).toBe(STREAM_EVENT.Meta);
+		expect(
+			parseStreamEvent(STREAM_EVENT.Meta, {
+				assistantId: 'a',
+				requestId: 'r',
+				msToFirst: 1,
+				tokensIn: 2,
+			})?.event,
+		).toBe(STREAM_EVENT.Meta);
 		expect(parseStreamEvent(STREAM_EVENT.Done, { id: 'x', tokensOut: 1, msTotal: 2 })?.event).toBe(STREAM_EVENT.Done);
 		expect(parseStreamEvent(STREAM_EVENT.Error, { code: 'X', message: 'bad' })?.event).toBe(STREAM_EVENT.Error);
 		expect(parseStreamEvent(STREAM_EVENT.Token, { delta: 42 })).toBeNull();

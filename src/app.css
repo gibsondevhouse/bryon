@@ -8,6 +8,7 @@
 :root {
 	/* Layout */
 	--sidebar-w: 260px;
+	--activity-w: 380px;
 	--content-max-w: 1060px;
 
 	/* Spacing */

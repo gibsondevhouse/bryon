@@ -1,6 +1,8 @@
+import { randomUUID } from 'node:crypto';
 import type { RequestHandler } from './$types';
 import { loadConfig } from '$lib/server/config';
 import { OllamaAdapter } from '$lib/server/llm/ollama';
+import { getOllamaSupervisor } from '$lib/server/llm/supervisor';
 import { isVisionCapable } from '$lib/server/llm/vision';
 import { countTokens } from '$lib/server/llm/tokens';
 import { getLogger } from '$lib/server/logger';
@@ -33,6 +35,8 @@ export const POST: RequestHandler = async ({ params, request }) => {
 	if (!parsed.ok) return parsed.response;
 
 	const { config } = loadConfig();
+	await getOllamaSupervisor().probe(true);
+
 	const attachments = parsed.data.attachments ?? [];
 	const hasImageAttachment = attachments.some((item) => item.kind === 'image');
 	// Client-sent thinkingMode takes priority over the config default.
@@ -125,6 +129,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 		async start(controller) {
 			const emit = makeEmitter(controller);
 			const startedAt = performance.now();
+			const assistantId = randomUUID();
 			let assistantContent = '';
 			let tokensIn: number | null = null;
 			let tokensOut: number | null = null;
@@ -139,6 +144,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 					signal: abortController.signal,
 					emit,
 					startedAt,
+					assistantId,
 					thinking,
 				});
 				assistantContent = result.assistantContent;
@@ -150,6 +156,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 				const assistantMessage = finalizeAssistant({
 					chatService,
 					chatId: params.id,
+					assistantId,
 					prompt,
 					assistantContent,
 					tokensIn,
@@ -205,6 +212,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 					finalizeInterrupted({
 						chatService,
 						chatId: params.id,
+						assistantId,
 						prompt,
 						assistantContent,
 						tokensIn,

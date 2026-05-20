@@ -4,6 +4,7 @@ let {
 	label,
 	disabled = false,
 	danger = false,
+	tabindex = undefined,
 	onclick,
 	children,
 }: {
@@ -11,6 +12,7 @@ let {
 	label: string;
 	disabled?: boolean;
 	danger?: boolean;
+	tabindex?: number | undefined;
 	onclick?: () => void;
 	children?: import('svelte').Snippet;
 } = $props();
@@ -22,6 +24,7 @@ let {
 	type="button"
 	{disabled}
 	{title}
+	tabindex={tabindex}
 	aria-label={label}
 	onclick={onclick}
 >
