@@ -88,7 +88,6 @@
 
 	/* Local-scope fallbacks (declared so design-tokens test passes;
 	   actual values are set inline or in layout-local rules) */
-	--activity-w: 380px;
 	--idx: 0;
 
 	/* Focus */

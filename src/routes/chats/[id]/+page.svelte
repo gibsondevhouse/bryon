@@ -1,5 +1,5 @@
 <script lang="ts">
-import { onMount, tick } from 'svelte';
+import { onMount, tick, untrack } from 'svelte';
 import { page } from '$app/state';
 import ChatView from '$lib/features/chat/ChatView.svelte';
 import { session } from '$lib/features/streaming/session.svelte';
@@ -7,9 +7,12 @@ import { session } from '$lib/features/streaming/session.svelte';
 let { data } = $props();
 
 $effect(() => {
-	session.hydrate({
-		currentChatId: data.chat.id,
-		messages: data.messages,
+	untrack(() => {
+		session.hydrate({
+			currentChatId: data.chat.id,
+			messages: data.messages,
+			projectFiles: data.projectFiles,
+		});
 	});
 });
 
@@ -51,4 +54,6 @@ onMount(() => {
 
 <ChatView
 	chatId={data.chat.id}
+	project={data.project}
+	projectFiles={data.projectFiles}
 />

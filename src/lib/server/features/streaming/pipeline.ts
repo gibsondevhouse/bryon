@@ -19,11 +19,12 @@ import {
 	tokenEventSchema,
 	type StreamEventName,
 } from '$lib/shared/stream-events';
-import type { LLMParams, MemorySettings, Message } from '$lib/shared/types';
+import type { Chat, LLMParams, MemorySettings, Message } from '$lib/shared/types';
 
 const encoder = new TextEncoder();
 
 export type StreamContext = {
+	chat: Chat;
 	persona: {
 		id: string;
 		systemPrompt: string;
@@ -72,6 +73,7 @@ export function loadStreamContext(
 	};
 
 	return {
+		chat,
 		persona: {
 			id: persona.id,
 			systemPrompt: persona.systemPrompt,
@@ -289,6 +291,7 @@ export function persistPromptSummary(
 
 export function buildSystemPrompt(input: {
 	basePrompt: string;
+	projectPromptOverride?: string | null;
 	memory: MemorySettings;
 	webContext?: string | null;
 	thinkingInstruction?: string | null;
@@ -304,6 +307,10 @@ export function buildSystemPrompt(input: {
 		timeZoneName: 'short',
 	});
 	const sections = [`Current date and time: ${dateTimeStr}\n\n${input.basePrompt.trim()}`];
+
+	if (input.projectPromptOverride?.trim()) {
+		sections.push(`Project prompt override:\n${input.projectPromptOverride.trim()}`);
+	}
 
 	if (input.memory.enabled) {
 		const memorySections: string[] = [];

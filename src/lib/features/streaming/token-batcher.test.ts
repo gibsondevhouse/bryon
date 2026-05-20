@@ -19,7 +19,7 @@ describe('token-batcher', () => {
 		batcher.push('lo');
 		expect(flushes).toEqual([]);
 
-		if (rafCallback) (rafCallback as any)(0);
+		(rafCallback as FrameRequestCallback | null)?.(0);
 		expect(flushes).toEqual(['Hello']);
 
 		vi.unstubAllGlobals();
@@ -37,7 +37,7 @@ describe('token-batcher', () => {
 			onFlush: (combined) => flushes.push(combined),
 		});
 		batcher.push('');
-		if (rafCallback) (rafCallback as any)(0);
+		(rafCallback as FrameRequestCallback | null)?.(0);
 		expect(flushes).toEqual([]);
 
 		vi.unstubAllGlobals();
@@ -69,7 +69,7 @@ describe('token-batcher', () => {
 		});
 		batcher.push('abc');
 		batcher.dispose();
-		if (rafCallback) (rafCallback as any)(0);
+		(rafCallback as FrameRequestCallback | null)?.(0);
 		expect(flushes).toEqual([]);
 		vi.unstubAllGlobals();
 	});
@@ -88,11 +88,11 @@ describe('token-batcher', () => {
 		});
 
 		batcher.push('a');
-		if (rafCallback) (rafCallback as any)(0);
+		(rafCallback as FrameRequestCallback | null)?.(0);
 		rafCallback = null;
 
 		batcher.push('b');
-		if (rafCallback) (rafCallback as any)(0);
+		(rafCallback as FrameRequestCallback | null)?.(0);
 
 		expect(flushes).toEqual(['a', 'b']);
 		vi.unstubAllGlobals();

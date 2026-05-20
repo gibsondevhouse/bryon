@@ -1,16 +1,19 @@
 <script lang="ts">
-import { goto } from '$app/navigation';
+import { goto, invalidateAll } from '$app/navigation';
 import { tick } from 'svelte';
-import { Plus, Settings, PanelLeftClose, MoreHorizontal, Pencil, Sparkles, Archive, Trash2, ChevronDown } from '@lucide/svelte';
+import { Plus, Settings, PanelLeftClose, MoreHorizontal, Pencil, Sparkles, Archive, Trash2, ChevronDown, Folder, FolderPlus, MoveRight } from '@lucide/svelte';
 import { session, type ThinkingMode } from '$lib/features/streaming/session.svelte';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuSeparator,
+	DropdownMenuSub,
+	DropdownMenuSubContent,
+	DropdownMenuSubTrigger,
 	DropdownMenuTrigger,
 } from '$lib/ui/dropdown-menu';
-import type { Chat, Settings as AppSettings } from '$lib/shared/types';
+import type { Chat, Project, Settings as AppSettings } from '$lib/shared/types';
 
 let {
 	settings,
@@ -69,14 +72,26 @@ const activeThinkingLabel = $derived(
 );
 
 const visibleChats = $derived(session.chats.filter((c) => !c.archived));
+const visibleProjects = $derived(session.projects.filter((project) => !project.archivedAt));
+const globalChats = $derived(visibleChats.filter((chat) => !chat.projectId));
 
 let renamingFor = $state<string | null>(null);
 let renameDraft = $state('');
 let renameInput: HTMLInputElement | undefined = $state();
+let renamingProjectFor = $state<string | null>(null);
+let projectRenameDraft = $state('');
+let projectRenameInput: HTMLInputElement | undefined = $state();
 
-async function createNewChat(): Promise<void> {
-	const id = await session.createChat();
+async function createNewChat(projectId: string | null = null): Promise<void> {
+	const id = await session.createChat(projectId);
 	if (id) goto(`/chats/${id}`);
+}
+
+async function createProject(): Promise<void> {
+	const name = prompt('Project name');
+	const trimmed = name?.trim();
+	if (!trimmed) return;
+	await session.createProject(trimmed);
 }
 
 function startRename(chat: Chat): void {
@@ -109,6 +124,27 @@ async function commitRename(chat: Chat): Promise<void> {
 
 function cancelRename(): void {
 	renamingFor = null;
+}
+
+function startProjectRename(project: Project): void {
+	renamingProjectFor = project.id;
+	projectRenameDraft = project.name;
+	void tick().then(() => {
+		projectRenameInput?.focus();
+		projectRenameInput?.select();
+	});
+}
+
+async function commitProjectRename(project: Project): Promise<void> {
+	const next = projectRenameDraft.trim();
+	const current = renamingProjectFor;
+	renamingProjectFor = null;
+	if (!next || next === project.name || current !== project.id) return;
+	await session.updateProject(project.id, { name: next });
+}
+
+function cancelProjectRename(): void {
+	renamingProjectFor = null;
 }
 
 let aiRenamingFor = $state<string | null>(null);
@@ -148,6 +184,19 @@ async function archiveChat(chat: Chat): Promise<void> {
 	}
 }
 
+async function archiveProject(project: Project): Promise<void> {
+	const ok = confirm(`Archive "${project.name}"? Its chats remain available if moved later.`);
+	if (!ok) return;
+	await session.archiveProject(project.id);
+}
+
+async function moveChat(chat: Chat, projectId: string | null): Promise<void> {
+	await session.moveChat(chat.id, projectId);
+	if (chat.id === currentChatId) {
+		await invalidateAll();
+	}
+}
+
 async function deleteChat(chat: Chat): Promise<void> {
 	const ok = confirm(`Delete "${chat.title}"? This cannot be undone.`);
 	if (!ok) return;
@@ -172,6 +221,16 @@ function onRenameKey(e: KeyboardEvent, chat: Chat): void {
 	}
 }
 
+function onProjectRenameKey(e: KeyboardEvent, project: Project): void {
+	if (e.key === 'Enter') {
+		e.preventDefault();
+		void commitProjectRename(project);
+	} else if (e.key === 'Escape') {
+		e.preventDefault();
+		cancelProjectRename();
+	}
+}
+
 function relativeGroup(ts: number): string {
 	const now = new Date();
 	const d = new Date(ts);
@@ -193,7 +252,7 @@ type Group = { label: string; items: Chat[] };
 
 const grouped = $derived.by((): Group[] => {
 	const map = new Map<string, Chat[]>();
-	for (const c of visibleChats) {
+	for (const c of globalChats) {
 		const label = relativeGroup(c.updatedAt);
 		let bucket = map.get(label);
 		if (!bucket) {
@@ -204,6 +263,10 @@ const grouped = $derived.by((): Group[] => {
 	}
 	return [...map.entries()].map(([label, items]) => ({ label, items }));
 });
+
+function projectChats(projectId: string): Chat[] {
+	return visibleChats.filter((chat) => chat.projectId === projectId);
+}
 </script>
 
 <svelte:window onclick={(e) => {
@@ -288,14 +351,138 @@ const grouped = $derived.by((): Group[] => {
 	</div>
 
 	<!-- New chat -->
-	<button class="new-chat" onclick={createNewChat}>
+	<button class="new-chat" onclick={() => createNewChat()}>
 		<Plus size={16} strokeWidth={2.5} />
 		<span>New chat</span>
 	</button>
 
 	<!-- Thread list -->
 	<div class="threads">
-		{#if session.chats.length === 0 && !session.currentChatId}
+		<div class="section-head">
+			<span>Projects</span>
+			<button type="button" onclick={createProject} title="Create project" aria-label="Create project">
+				<FolderPlus size={13} />
+			</button>
+		</div>
+		{#each visibleProjects as project (project.id)}
+			<div class="project-row">
+				{#if renamingProjectFor === project.id}
+					<input
+						bind:this={projectRenameInput}
+						class="rename-input"
+						bind:value={projectRenameDraft}
+						onkeydown={(e) => onProjectRenameKey(e, project)}
+						onblur={() => commitProjectRename(project)}
+						aria-label="Rename project"
+					/>
+				{:else}
+					<button class="project-name" type="button" onclick={() => createNewChat(project.id)} title="New chat in {project.name}">
+						<Folder size={13} />
+						<span>{project.name}</span>
+					</button>
+					<DropdownMenu>
+						<DropdownMenuTrigger aria-label="Project actions">
+							<MoreHorizontal size={14} />
+						</DropdownMenuTrigger>
+						<DropdownMenuContent align="end">
+							<DropdownMenuItem onSelect={() => createNewChat(project.id)}>
+								<Plus size={13} />
+								<span>New chat</span>
+							</DropdownMenuItem>
+							<DropdownMenuItem onSelect={() => startProjectRename(project)}>
+								<Pencil size={13} />
+								<span>Rename project</span>
+							</DropdownMenuItem>
+							<DropdownMenuSeparator />
+							<DropdownMenuItem onSelect={() => archiveProject(project)}>
+								<Archive size={13} />
+								<span>Archive project</span>
+							</DropdownMenuItem>
+						</DropdownMenuContent>
+					</DropdownMenu>
+				{/if}
+			</div>
+
+			{#each projectChats(project.id) as chat (chat.id)}
+				<div class="row project-chat" class:active={chat.id === currentChatId}>
+					{#if renamingFor === chat.id}
+						<input
+							bind:this={renameInput}
+							class="rename-input"
+							bind:value={renameDraft}
+							onkeydown={(e) => onRenameKey(e, chat)}
+							onblur={() => commitRename(chat)}
+							aria-label="Rename chat"
+						/>
+					{:else}
+						<a
+							class="thread"
+							href={`/chats/${chat.id}`}
+							title={chat.title}
+							aria-current={chat.id === currentChatId ? 'page' : undefined}
+						>
+							<span class="thread-title">{chat.title}</span>
+						</a>
+						<DropdownMenu>
+							<DropdownMenuTrigger aria-label="Chat actions">
+								<MoreHorizontal size={14} />
+							</DropdownMenuTrigger>
+
+							<DropdownMenuContent align="end">
+								<DropdownMenuItem onSelect={() => startRename(chat)}>
+									<Pencil size={13} />
+									<span>Rename manually</span>
+								</DropdownMenuItem>
+
+								<DropdownMenuItem
+									disabled={aiRenamingFor === chat.id}
+									onSelect={() => aiRename(chat)}
+								>
+									<Sparkles size={13} class={aiRenamingFor === chat.id ? 'spin' : ''} />
+									<span>Rename with AI</span>
+								</DropdownMenuItem>
+
+								<DropdownMenuSub>
+									<DropdownMenuSubTrigger>
+										<MoveRight size={13} />
+										<span>Move to</span>
+									</DropdownMenuSubTrigger>
+									<DropdownMenuSubContent>
+										<DropdownMenuItem onSelect={() => moveChat(chat, null)}>
+											<span>Global</span>
+										</DropdownMenuItem>
+										{#each visibleProjects as target (target.id)}
+											<DropdownMenuItem
+												disabled={target.id === chat.projectId}
+												onSelect={() => moveChat(chat, target.id)}
+											>
+												<span>{target.name}</span>
+											</DropdownMenuItem>
+										{/each}
+									</DropdownMenuSubContent>
+								</DropdownMenuSub>
+
+								<DropdownMenuSeparator />
+
+								<DropdownMenuItem onSelect={() => archiveChat(chat)}>
+									<Archive size={13} />
+									<span>Archive</span>
+								</DropdownMenuItem>
+								<DropdownMenuItem variant="destructive" onSelect={() => deleteChat(chat)}>
+									<Trash2 size={13} />
+									<span>Delete</span>
+								</DropdownMenuItem>
+							</DropdownMenuContent>
+						</DropdownMenu>
+					{/if}
+				</div>
+			{/each}
+		{/each}
+
+		<div class="section-head global-head">
+			<span>Global chats</span>
+		</div>
+		{#if session.chats.length === 0 && visibleProjects.length === 0 && !session.currentChatId}
 			<div class="skeletons">
 				{#each Array(6) as _}
 					<div class="skeleton-row">
@@ -346,6 +533,26 @@ const grouped = $derived.by((): Group[] => {
 									<span>Rename with AI</span>
 								</DropdownMenuItem>
 
+								<DropdownMenuSub>
+									<DropdownMenuSubTrigger>
+										<MoveRight size={13} />
+										<span>Move to</span>
+									</DropdownMenuSubTrigger>
+									<DropdownMenuSubContent>
+										<DropdownMenuItem
+											disabled={!chat.projectId}
+											onSelect={() => moveChat(chat, null)}
+										>
+											<span>Global</span>
+										</DropdownMenuItem>
+										{#each visibleProjects as project (project.id)}
+											<DropdownMenuItem onSelect={() => moveChat(chat, project.id)}>
+												<span>{project.name}</span>
+											</DropdownMenuItem>
+										{/each}
+									</DropdownMenuSubContent>
+								</DropdownMenuSub>
+
 								<DropdownMenuSeparator />
 
 								<DropdownMenuItem onSelect={() => archiveChat(chat)}>
@@ -362,7 +569,7 @@ const grouped = $derived.by((): Group[] => {
 				</div>
 			{/each}
 		{:else}
-			<div class="empty-hint">No conversations yet</div>
+			<div class="empty-hint">No global chats</div>
 		{/each}
 	</div>
 
@@ -549,6 +756,103 @@ const grouped = $derived.by((): Group[] => {
 	display: flex;
 	flex-direction: column;
 	gap: 1px;
+}
+
+.section-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: var(--sp-3) var(--sp-2) var(--sp-1);
+	color: var(--text-muted);
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.section-head button {
+	display: grid;
+	place-items: center;
+	width: 24px;
+	height: 24px;
+	border: none;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--text-muted);
+	cursor: pointer;
+}
+
+.section-head button:hover {
+	background: var(--bg-surface-hover);
+	color: var(--text-primary);
+}
+
+.global-head {
+	margin-top: var(--sp-2);
+}
+
+.project-row {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	border-radius: var(--radius-sm);
+}
+
+.project-name {
+	display: flex;
+	align-items: center;
+	gap: var(--sp-2);
+	flex: 1;
+	min-width: 0;
+	padding: var(--sp-2);
+	border: none;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--text-primary);
+	font: inherit;
+	font-size: 13px;
+	font-weight: 650;
+	cursor: pointer;
+	text-align: left;
+}
+
+.project-name span {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.project-name:hover {
+	background: var(--bg-surface-hover);
+}
+
+.project-row :global([data-slot='dropdown-menu-trigger']) {
+	flex-shrink: 0;
+	display: grid;
+	place-items: center;
+	width: 24px;
+	height: 24px;
+	margin-right: 2px;
+	border: none;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--text-muted);
+	cursor: pointer;
+	opacity: 0;
+	transition:
+		opacity var(--motion-fast),
+		background var(--motion-fast),
+		color var(--motion-fast);
+}
+
+.project-row:hover :global([data-slot='dropdown-menu-trigger']),
+.project-row :global([data-slot='dropdown-menu-trigger'][data-state='open']),
+.project-row :global([data-slot='dropdown-menu-trigger']:focus-visible) {
+	opacity: 1;
+}
+
+.project-chat {
+	padding-left: var(--sp-3);
 }
 
 .group-label {

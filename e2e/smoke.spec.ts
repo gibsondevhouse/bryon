@@ -18,7 +18,7 @@ test.describe('smoke', () => {
 	test('home page renders quick-start surface when no chats exist', async ({ page }) => {
 		await page.goto('/');
 		await expect(
-			page.getByRole('heading', { name: /Open a conversation/i }),
+			page.getByRole('heading', { name: 'Bryon' }),
 		).toBeVisible();
 		await expect(
 			page.getByTestId('start-new-chat'),
@@ -32,7 +32,7 @@ test.describe('smoke', () => {
 		await page.getByTestId('start-new-chat').click();
 		await page.waitForURL(/\/chats\/[\w-]+/);
 		await expect(
-			page.getByRole('heading', { name: /What can I help with/i }),
+			page.getByRole('heading', { name: 'Bryon' }),
 		).toBeVisible();
 	});
 

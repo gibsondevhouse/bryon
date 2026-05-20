@@ -8,7 +8,7 @@ export type WebSearchResult = {
 
 export type WebSearchResponse = {
 	query: string;
-	provider: 'searxng' | 'duckduckgo' | 'google_news';
+	provider: 'searxng' | 'duckduckgo';
 	results: WebSearchResult[];
 	answer?: string | null;
 	warning?: string | null;
@@ -25,6 +25,21 @@ type SearxngResponse = {
 	infoboxes?: Array<{ content?: string }>;
 };
 
+type DuckDuckGoResponse = {
+	Abstract?: string;
+	AbstractURL?: string;
+	AbstractSource?: string;
+	Answer?: string;
+	Definition?: string;
+	DefinitionURL?: string;
+	DefinitionSource?: string;
+	RelatedTopics?: Array<{
+		Text?: string;
+		FirstURL?: string;
+		Topics?: Array<{ Text?: string; FirstURL?: string }>;
+	}>;
+	Results?: Array<{ Text?: string; FirstURL?: string }>;
+};
 
 export class WebSearchError extends Error {
 	constructor(
@@ -59,14 +74,14 @@ export class WebSearchService {
 				});
 			} catch (error) {
 				try {
-					const fallback = await searchGoogleNewsRss({
+					const fallback = await searchDuckDuckGo({
 						query,
 						maxResults: this.settings.max_results,
 						signal,
 					});
 					return {
 						...fallback,
-						warning: `SearXNG failed; used Google News as fallback. ${(error as Error).message}`,
+						warning: `SearXNG failed; used DuckDuckGo Instant Answers as fallback. ${(error as Error).message}`,
 					};
 				} catch {
 					throw error;
@@ -74,7 +89,7 @@ export class WebSearchService {
 			}
 		}
 
-		return searchGoogleNewsRss({
+		return searchDuckDuckGo({
 			query,
 			maxResults: this.settings.max_results,
 			signal,
@@ -86,7 +101,6 @@ export function formatWebSearchForPrompt(response: WebSearchResponse): string {
 	const providerLabel: Record<WebSearchResponse['provider'], string> = {
 		searxng: 'SearXNG',
 		duckduckgo: 'DuckDuckGo',
-		google_news: 'Google News',
 	};
 	const lines = [
 		`Web search results for: "${response.query}"`,
@@ -105,7 +119,7 @@ export function formatWebSearchForPrompt(response: WebSearchResponse): string {
 		lines.push('Results:');
 		for (const [index, result] of response.results.entries()) {
 			lines.push(
-				`${index + 1}. ${result.title}${result.snippet ? ` (${result.snippet})` : ''}`,
+				`${index + 1}. ${result.title}${result.snippet ? ` (${result.snippet})` : ''}\nURL: ${result.url}`,
 			);
 		}
 	}
@@ -160,12 +174,16 @@ async function searchSearxng(input: {
 	};
 }
 
-async function searchGoogleNewsRss(input: {
+async function searchDuckDuckGo(input: {
 	query: string;
 	maxResults: number;
 	signal?: AbortSignal;
 }): Promise<WebSearchResponse> {
-	const url = `https://news.google.com/rss/search?q=${encodeURIComponent(input.query)}&hl=en-US&gl=US&ceid=US:en`;
+	const url = new URL('https://api.duckduckgo.com/');
+	url.searchParams.set('q', input.query);
+	url.searchParams.set('format', 'json');
+	url.searchParams.set('no_html', '1');
+	url.searchParams.set('skip_disambig', '1');
 
 	const response = await fetch(url, {
 		headers: { 'user-agent': 'Bryon/1.0 rich chat client' },
@@ -174,61 +192,89 @@ async function searchGoogleNewsRss(input: {
 
 	if (!response.ok) {
 		throw new WebSearchError(
-			`Google News RSS returned HTTP ${response.status}.`,
+			`DuckDuckGo Instant Answers returned HTTP ${response.status}.`,
 			'WEB_SEARCH_FAILED',
 		);
 	}
 
-	const xml = await response.text();
+	const data = (await response.json()) as DuckDuckGoResponse;
 	const results: WebSearchResult[] = [];
-	const itemRegex = /<item>([\s\S]*?)<\/item>/g;
 
-	for (
-		let match = itemRegex.exec(xml);
-		match !== null && results.length < input.maxResults;
-		match = itemRegex.exec(xml)
+	if (data.Abstract?.trim() && data.AbstractURL?.trim()) {
+		results.push({
+			title: data.AbstractSource?.trim() || 'DuckDuckGo abstract',
+			url: data.AbstractURL.trim(),
+			snippet: data.Abstract.trim(),
+		});
+	}
+	if (
+		results.length < input.maxResults &&
+		data.Definition?.trim() &&
+		data.DefinitionURL?.trim()
 	) {
-		const item = match[1];
-		const link = extractRssField(item, 'link');
-		if (!link?.startsWith('http')) continue;
-
-		const rawTitle = extractRssField(item, 'title') ?? '';
-		const lastDash = rawTitle.lastIndexOf(' - ');
-		const title = lastDash >= 0 ? rawTitle.slice(0, lastDash).trim() : rawTitle.trim();
-		const source = lastDash >= 0 ? rawTitle.slice(lastDash + 3).trim() : '';
-
-		if (!title) continue;
-		results.push({ title, url: link, snippet: source });
+		results.push({
+			title: data.DefinitionSource?.trim() || 'DuckDuckGo definition',
+			url: data.DefinitionURL.trim(),
+			snippet: data.Definition.trim(),
+		});
+	}
+	for (const result of data.Results ?? []) {
+		if (results.length >= input.maxResults) break;
+		if (result.Text?.trim() && result.FirstURL?.trim()) {
+			results.push({
+				title: firstSentence(result.Text),
+				url: result.FirstURL.trim(),
+				snippet: result.Text.trim(),
+			});
+		}
+	}
+	for (const topic of data.RelatedTopics ?? []) {
+		if (results.length >= input.maxResults) break;
+		appendDuckDuckGoTopic(results, topic, input.maxResults);
 	}
 
 	return {
 		query: input.query,
-		provider: 'google_news',
-		results,
-		answer: null,
+		provider: 'duckduckgo',
+		results: results.slice(0, input.maxResults),
+		answer: data.Answer?.trim() || null,
 		warning:
 			results.length === 0
-				? 'No news results found for this query. Try different keywords.'
+				? 'DuckDuckGo Instant Answers returned no usable related results. Try different keywords or configure SearXNG for broader web search.'
 				: null,
 	};
 }
 
-function extractRssField(item: string, field: string): string | null {
-	const m = item.match(
-		new RegExp(`<${field}[^>]*>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?<\\/${field}>`),
-	);
-	if (!m) return null;
-	return decodeXmlEntities(m[1].trim());
+function appendDuckDuckGoTopic(
+	results: WebSearchResult[],
+	topic: NonNullable<DuckDuckGoResponse['RelatedTopics']>[number],
+	maxResults: number,
+): void {
+	if (results.length >= maxResults) return;
+	if (topic.Text?.trim() && topic.FirstURL?.trim()) {
+		results.push({
+			title: firstSentence(topic.Text),
+			url: topic.FirstURL.trim(),
+			snippet: topic.Text.trim(),
+		});
+		return;
+	}
+	for (const child of topic.Topics ?? []) {
+		if (results.length >= maxResults) return;
+		if (child.Text?.trim() && child.FirstURL?.trim()) {
+			results.push({
+				title: firstSentence(child.Text),
+				url: child.FirstURL.trim(),
+				snippet: child.Text.trim(),
+			});
+		}
+	}
 }
 
-function decodeXmlEntities(s: string): string {
-	return s
-		.replace(/&amp;/g, '&')
-		.replace(/&lt;/g, '<')
-		.replace(/&gt;/g, '>')
-		.replace(/&quot;/g, '"')
-		.replace(/&#39;/g, "'")
-		.replace(/&#x27;/g, "'");
+function firstSentence(value: string): string {
+	const trimmed = value.trim();
+	const sentence = trimmed.match(/^(.{1,120}?)(?:[.!?]\s|$)/)?.[1]?.trim();
+	return sentence || trimmed.slice(0, 120);
 }
 
 function trimTrailingSlash(value: string): string {

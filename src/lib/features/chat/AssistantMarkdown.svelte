@@ -1,5 +1,5 @@
 <script lang="ts">
-import { marked } from 'marked';
+import { marked, type Tokens } from 'marked';
 import { sanitizeAssistantHtml } from './sanitize';
 import { stabilizeMarkdown } from './streaming-markdown';
 import { enhanceCodeBlocks } from './code-enhancer';
@@ -19,9 +19,9 @@ let proseEl: HTMLDivElement | undefined = $state();
 const renderer = new marked.Renderer();
 const originalCode = renderer.code.bind(renderer);
 
-renderer.code = function(code: { text: string; lang?: string; escaped?: boolean }) {
-    const { text, lang, escaped } = code;
-    if (!lang) return originalCode(code as any);
+renderer.code = (code: Tokens.Code) => {
+    const { text, lang } = code;
+    if (!lang) return originalCode(code);
 
     // Check global Shiki cache
     const cached = getCachedHighlight(lang, text);
@@ -46,7 +46,7 @@ renderer.code = function(code: { text: string; lang?: string; escaped?: boolean 
     }
 
     // Not streaming, will be enhanced by enhanceCodeBlocks effect
-    return originalCode(code as any);
+    return originalCode(code);
 };
 
 const renderedHtml = $derived.by(() => {

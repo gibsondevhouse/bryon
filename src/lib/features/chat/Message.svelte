@@ -96,7 +96,7 @@ function handleLightboxKeydown(event: KeyboardEvent): void {
 {#if role === 'system' || role === 'tool_call' || role === 'tool_result'}
 	<!-- hidden -->
 {:else if role === 'user'}
-	<article class="msg-container" role="article" aria-label="Message from user">
+	<article class="msg-container" aria-label="Message from user">
 		<UserMessage {content} {attachments} onOpenLightbox={openLightbox} />
 		{#if timestamp}
 			<div class="msg-user">
@@ -119,7 +119,7 @@ function handleLightboxKeydown(event: KeyboardEvent): void {
 		{/if}
 	</article>
 {:else}
-	<article class="msg msg-assistant" class:streaming={isStreaming} role="article" aria-label="Message from Bryon">
+	<article class="msg msg-assistant" class:streaming={isStreaming} aria-label="Message from Bryon">
 		<MessageHeader />
 
 		<div class="assistant-body">
@@ -178,22 +178,6 @@ function handleLightboxKeydown(event: KeyboardEvent): void {
 	padding: var(--sp-5) 0;
 }
 
-/* ── User message ── */
-.msg-user {
-	display: flex;
-	flex-direction: column;
-	align-items: flex-end;
-	justify-content: flex-end;
-}
-
-.user-bubble {
-	max-width: 85%;
-	padding: var(--sp-3) var(--sp-4);
-	border-radius: var(--radius-lg) var(--radius-lg) var(--sp-1) var(--radius-lg);
-	background: var(--bg-user-msg);
-	border: 1px solid var(--border-subtle);
-}
-
 .ts {
 	display: inline-flex;
 }
@@ -210,225 +194,8 @@ function handleLightboxKeydown(event: KeyboardEvent): void {
 	opacity: 1;
 }
 
-/* ── Assistant message ── */
-.assistant-label {
-	display: flex;
-	align-items: center;
-	gap: var(--sp-2);
-	margin-bottom: var(--sp-3);
-	font-size: 13px;
-	font-weight: 600;
-	color: var(--text-secondary);
-}
-
-.bot-icon {
-	display: grid;
-	place-items: center;
-	width: 22px;
-	height: 22px;
-	border-radius: 6px;
-	background: var(--accent);
-	color: white;
-}
-
 .assistant-body {
 	padding-left: 30px; /* align with text after icon + gap */
-}
-
-/* ── Prose (markdown) ── */
-.prose {
-	font-size: 15px;
-	line-height: 1.75;
-	color: var(--text-primary);
-	word-wrap: break-word;
-	overflow-wrap: break-word;
-}
-
-.prose :global(p)            { margin: 0 0 var(--sp-3); }
-.prose :global(p:last-child) { margin: 0; }
-
-.prose :global(pre) {
-	margin: var(--sp-4) 0;
-	border: 1px solid var(--border-default);
-	border-radius: var(--radius-sm);
-	background: var(--bg-code);
-	padding: var(--sp-4);
-	overflow-x: auto;
-	color: #cdd6f4;
-	font-size: 13px;
-	line-height: 1.6;
-}
-
-/* ── Shiki-enhanced code block ── */
-.prose :global(.code-block) {
-	margin: var(--sp-4) 0;
-	border: 1px solid var(--border-default);
-	border-radius: var(--radius-sm);
-	overflow: hidden;
-	background: #fff;
-}
-.prose :global(.code-block .code-header) {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: var(--sp-2);
-	padding: 4px var(--sp-2) 4px var(--sp-3);
-	border-bottom: 1px solid var(--border-subtle);
-	background: var(--bg-surface);
-	font-size: 11px;
-	color: var(--text-muted);
-	font-family: 'SF Mono', 'JetBrains Mono', ui-monospace, monospace;
-}
-.prose :global(.code-block .code-lang) {
-	text-transform: lowercase;
-	letter-spacing: 0.04em;
-}
-.prose :global(.code-block .code-copy) {
-	border: 1px solid transparent;
-	border-radius: 4px;
-	background: transparent;
-	color: var(--text-muted);
-	font-family: inherit;
-	font-size: 11px;
-	padding: 2px 8px;
-	cursor: pointer;
-}
-.prose :global(.code-block .code-copy:hover) {
-	background: var(--bg-surface-hover);
-	color: var(--text-primary);
-}
-.prose :global(.code-block .code-copy.copied) {
-	color: var(--green);
-}
-.prose :global(.code-block .code-body) {
-	overflow-x: auto;
-	font-size: 13px;
-	line-height: 1.55;
-}
-.prose :global(.code-block .code-body pre) {
-	margin: 0;
-	border: none;
-	border-radius: 0;
-	padding: var(--sp-3) var(--sp-4);
-	background: #fff !important;
-	color: inherit;
-	font-size: 13px;
-	overflow: visible;
-}
-.prose :global(.code-block .code-body code) {
-	font-size: 13px;
-	background: transparent;
-	padding: 0;
-	color: inherit;
-}
-
-.prose :global(code) {
-	font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', ui-monospace, monospace;
-	font-size: 0.88em;
-}
-
-.prose :global(:not(pre) > code) {
-	border-radius: 5px;
-	background: var(--accent-soft);
-	padding: 2px 7px;
-	color: var(--accent-text);
-}
-
-.prose :global(ul),
-.prose :global(ol) { margin: var(--sp-2) 0; padding-left: 22px; }
-.prose :global(li)  { margin-bottom: var(--sp-1); }
-.prose :global(li::marker) { color: var(--text-muted); }
-
-.prose :global(blockquote) {
-	margin: var(--sp-4) 0;
-	border-left: 3px solid var(--accent);
-	padding: var(--sp-1) 0 var(--sp-1) var(--sp-4);
-	color: var(--text-secondary);
-}
-
-.prose :global(h1),
-.prose :global(h2),
-.prose :global(h3) {
-	margin: var(--sp-6) 0 var(--sp-2);
-	font-weight: 650;
-	color: var(--text-primary);
-	line-height: 1.4;
-}
-.prose :global(h1) { font-size: 1.3em; }
-.prose :global(h2) { font-size: 1.15em; }
-.prose :global(h3) { font-size: 1.05em; }
-
-.prose :global(table) {
-	width: 100%; margin: var(--sp-4) 0; border-collapse: collapse; font-size: 14px;
-}
-.prose :global(th),
-.prose :global(td) {
-	border: 1px solid var(--border-default); padding: var(--sp-2) var(--sp-3); text-align: left;
-}
-.prose :global(th) { background: var(--bg-surface); font-weight: 600; }
-
-.prose :global(hr) {
-	margin: var(--sp-6) 0; border: none; border-top: 1px solid var(--border-subtle);
-}
-.prose :global(a)       { color: var(--accent-text); text-decoration: none; }
-.prose :global(a:hover) { text-decoration: underline; }
-.prose :global(strong)  { font-weight: 650; color: var(--text-primary); }
-
-/* ── Image attachments ── */
-.msg-images {
-	display: flex;
-	flex-wrap: wrap;
-	justify-content: flex-end;
-	gap: var(--sp-2);
-	margin-bottom: var(--sp-2);
-	max-width: 85%;
-}
-
-.msg-img-btn {
-	padding: 0;
-	background: none;
-	border: none;
-	cursor: zoom-in;
-	border-radius: var(--radius-sm);
-	overflow: hidden;
-	flex-shrink: 0;
-}
-
-.msg-img {
-	display: block;
-	max-width: 200px;
-	max-height: 180px;
-	object-fit: cover;
-	border-radius: var(--radius-sm);
-	border: 1px solid var(--border-subtle);
-}
-
-.msg-docs {
-	display: flex;
-	flex-wrap: wrap;
-	justify-content: flex-end;
-	gap: var(--sp-2);
-	margin-bottom: var(--sp-2);
-	max-width: 85%;
-}
-
-.msg-doc {
-	display: inline-flex;
-	align-items: center;
-	gap: var(--sp-2);
-	max-width: 260px;
-	padding: var(--sp-2) var(--sp-3);
-	border: 1px solid var(--border-subtle);
-	border-radius: var(--radius-sm);
-	background: var(--bg-surface);
-	color: var(--text-secondary);
-	font-size: 12px;
-}
-
-.msg-doc span {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
 }
 
 /* ── Lightbox ── */

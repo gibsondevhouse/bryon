@@ -1,4 +1,4 @@
-import type { Attachment, Chat, Message, Settings } from '$lib/shared/types';
+import type { Attachment, Chat, Message, Project, ProjectFile, Settings } from '$lib/shared/types';
 import {
 	STREAM_ERROR_CODE,
 	type NewsArticle,
@@ -40,11 +40,14 @@ export type ContextBudgetStatus = {
 
 export type SendOptions = {
 	attachments?: Attachment[];
+	projectFileIds?: string[];
 	webSearch?: boolean;
 };
 
 export class Session {
 	chats = $state<Chat[]>([]);
+	projects = $state<Project[]>([]);
+	projectFiles = $state(new Map<string, ProjectFile[]>());
 	currentChatId = $state<string | null>(null);
 	messages = $state<Message[]>([]);
 	phase = $state<StreamPhase>({ kind: 'idle' });
@@ -66,6 +69,7 @@ export class Session {
 	thinkingMode = $state<ThinkingMode>('normal');
 	contextBudget = $state<ContextBudgetStatus | null>(null);
 	ollamaState = $state<'unknown' | 'ready' | 'unreachable'>('unknown');
+	draftWebSearch = $state(false);
 
 	// Derived states from phase
 	streaming = $derived(
@@ -81,16 +85,27 @@ export class Session {
 
 	hydrate(input: {
 		chats?: Chat[];
+		projects?: Project[];
 		currentChatId?: string | null;
 		messages?: Message[];
+		projectFiles?: ProjectFile[];
 		settings?: Settings;
 		ollamaReachable?: boolean;
 	}): void {
 		if (input.chats) this.chats = input.chats;
+		if (input.projects) this.projects = input.projects;
 		if ('currentChatId' in input) {
 			this.currentChatId = input.currentChatId ?? null;
 		}
 		if (input.messages) this.messages = input.messages;
+		if (input.projectFiles && this.currentChatId) {
+			const chat = this.chats.find((item) => item.id === this.currentChatId);
+			if (chat?.projectId) {
+				const next = new Map(this.projectFiles);
+				next.set(chat.projectId, input.projectFiles);
+				this.projectFiles = next;
+			}
+		}
 		if (input.settings) this.settings = input.settings;
 		if ('ollamaReachable' in input) {
 			this.ollamaReachable = input.ollamaReachable ?? true;
@@ -108,9 +123,13 @@ export class Session {
 			try {
 				const response = await fetch('/api/health');
 				if (response.ok) {
-					const data = await response.json();
-					this.ollamaState = data.ollama;
-					this.ollamaReachable = data.ollama === 'ready';
+					const data = (await response.json()) as {
+						ollama?: boolean;
+						ollamaState?: 'unknown' | 'ready' | 'unreachable';
+					};
+					this.ollamaState =
+						data.ollamaState ?? (data.ollama ? 'ready' : 'unreachable');
+					this.ollamaReachable = data.ollama ?? this.ollamaState === 'ready';
 				}
 			} catch {
 				this.ollamaState = 'unreachable';
@@ -188,6 +207,7 @@ export class Session {
 		this.lastUserContent = trimmed;
 		this.lastSendOptions = {
 			attachments,
+			projectFileIds: options.projectFileIds ?? [],
 			webSearch: options.webSearch ?? false,
 		};
 
@@ -222,6 +242,9 @@ export class Session {
 				body: JSON.stringify({
 					content: trimmed,
 					attachments: attachments.length ? attachments : undefined,
+					projectFileIds: options.projectFileIds?.length
+						? options.projectFileIds
+						: undefined,
 					webSearch: options.webSearch ?? false,
 					thinkingMode: this.thinkingMode,
 				}),
@@ -230,9 +253,7 @@ export class Session {
 
 			if (!response.ok || !response.body) {
 				const errorData = await response.json().catch(() => null);
-				const code =
-					(errorData?.error?.code as any) ??
-					STREAM_ERROR_CODE.StreamInterrupted;
+				const code = this.readErrorCode(errorData);
 				const message: string =
 					errorData?.error?.message ?? `HTTP ${response.status}`;
 				this.transition({ type: 'ERROR', code, message });
@@ -260,6 +281,21 @@ export class Session {
 		}
 	}
 
+	private readErrorCode(data: unknown): StreamErrorCode {
+		if (
+			typeof data === 'object' &&
+			data !== null &&
+			'error' in data &&
+			typeof data.error === 'object' &&
+			data.error !== null &&
+			'code' in data.error &&
+			typeof data.error.code === 'string'
+		) {
+			return data.error.code as StreamErrorCode;
+		}
+		return STREAM_ERROR_CODE.StreamInterrupted;
+	}
+
 	async retryLast(): Promise<void> {
 		if (!this.currentChatId || !this.lastUserContent) return;
 		if (this.streaming) return;
@@ -283,12 +319,12 @@ export class Session {
 		}
 	}
 
-	async createChat(): Promise<string | null> {
+	async createChat(projectId?: string | null): Promise<string | null> {
 		try {
 			const response = await fetch('/api/chats', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({}),
+				body: JSON.stringify({ projectId }),
 			});
 			if (!response.ok) return null;
 			const { chat }: { chat: Chat } = await response.json();
@@ -308,6 +344,89 @@ export class Session {
 			}
 		} catch {
 			// silent — sidebar shows stale list
+		}
+	}
+
+	async moveChat(chatId: string, projectId: string | null): Promise<void> {
+		try {
+			const response = await fetch(`/api/chats/${chatId}`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ projectId }),
+			});
+			if (!response.ok) return;
+			const { chat }: { chat: Chat } = await response.json();
+			this.chats = this.chats.map((item) => (item.id === chatId ? chat : item));
+		} catch {
+			// silent — chat stays in its current scope
+		}
+	}
+
+	async refreshProjects(): Promise<void> {
+		try {
+			const response = await fetch('/api/projects');
+			if (!response.ok) return;
+			const { projects }: { projects: Project[] } = await response.json();
+			this.projects = projects;
+		} catch {
+			// silent — sidebar keeps stale projects
+		}
+	}
+
+	async createProject(name: string): Promise<Project | null> {
+		try {
+			const response = await fetch('/api/projects', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ name }),
+			});
+			if (!response.ok) return null;
+			const { project }: { project: Project } = await response.json();
+			this.projects = [project, ...this.projects];
+			return project;
+		} catch {
+			return null;
+		}
+	}
+
+	async updateProject(id: string, input: Partial<Project>): Promise<Project | null> {
+		try {
+			const response = await fetch(`/api/projects/${id}`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(input),
+			});
+			if (!response.ok) return null;
+			const { project }: { project: Project } = await response.json();
+			this.projects = this.projects.map((item) => (item.id === id ? project : item));
+			return project;
+		} catch {
+			return null;
+		}
+	}
+
+	async archiveProject(id: string): Promise<void> {
+		try {
+			const response = await fetch(`/api/projects/${id}`, { method: 'DELETE' });
+			if (!response.ok) return;
+			const { project }: { project: Project } = await response.json();
+			this.projects = this.projects.map((item) => (item.id === id ? project : item));
+		} catch {
+			// silent — project remains visible
+		}
+	}
+
+	async refreshProjectFiles(projectId: string): Promise<ProjectFile[]> {
+		try {
+			const response = await fetch(`/api/projects/${projectId}/files`);
+			if (!response.ok) return this.projectFiles.get(projectId) ?? [];
+			const { files }: { files: ProjectFile[] } = await response.json();
+			const next = new Map(this.projectFiles);
+			next.set(projectId, files);
+			this.projectFiles = next;
+			return files;
+		} catch {
+			return this.projectFiles.get(projectId) ?? [];
 		}
 	}
 
@@ -401,7 +520,6 @@ export class Session {
 				this.transition({
 					type: 'META',
 					assistantId: data.assistantId,
-					requestId: data.requestId,
 					tokensIn: data.tokensIn,
 					msToFirst: data.msToFirst,
 				});
@@ -412,23 +530,13 @@ export class Session {
 					tokensOut: 0,
 					msTotal: 0,
 				};
-				// contextLimit/tokenBudget/softCapReached are optional in metaEventSchema
-				const contextLimit = (data as Record<string, unknown>).contextLimit as
-					| number
-					| undefined;
-				const tokenBudget = (data as Record<string, unknown>).tokenBudget as
-					| number
-					| undefined;
-				const softCapReached = (data as Record<string, unknown>).softCapReached as
-					| boolean
-					| undefined;
-				if (contextLimit && tokenBudget) {
+				if (data.contextLimit && data.tokenBudget) {
 					this.contextBudget = {
-						contextLimit,
-						tokenBudget,
+						contextLimit: data.contextLimit,
+						tokenBudget: data.tokenBudget,
 						tokensIn: data.tokensIn,
-						usedPct: Math.min(1, data.tokensIn / tokenBudget),
-						softCapReached: softCapReached ?? false,
+						usedPct: Math.min(1, data.tokensIn / data.tokenBudget),
+						softCapReached: data.softCapReached ?? false,
 					};
 				}
 			},

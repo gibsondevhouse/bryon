@@ -1,10 +1,13 @@
 <script lang="ts">
-import { X, AlertCircle, Info, CheckCircle } from '@lucide/svelte';
-import { errorChannel, type AppError } from '../features/streaming/error-channel.svelte';
+import { X, AlertCircle, Info } from '@lucide/svelte';
+import { errorChannel } from '../features/streaming/error-channel.svelte';
 
 function remove(id: string) {
     errorChannel.remove(id);
 }
+
+const __templateUsage = () => [X, AlertCircle, Info, errorChannel, remove];
+void __templateUsage;
 </script>
 
 <div class="toast-container" role="alert" aria-live="assertive">

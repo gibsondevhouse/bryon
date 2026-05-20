@@ -14,13 +14,11 @@ describe('stream event schemas', () => {
 		expect(
 			metaEventSchema.parse({
 				assistantId: 'a1',
-				requestId: 'r1',
 				msToFirst: 10,
 				tokensIn: 20,
 			}),
 		).toEqual({
 			assistantId: 'a1',
-			requestId: 'r1',
 			msToFirst: 10,
 			tokensIn: 20,
 		});
@@ -43,7 +41,6 @@ describe('stream event schemas', () => {
 		expect(
 			parseStreamEvent(STREAM_EVENT.Meta, {
 				assistantId: 'a',
-				requestId: 'r',
 				msToFirst: 1,
 				tokensIn: 2,
 			})?.event,

@@ -9,7 +9,11 @@ import type {
 	messageRoleSchema,
 	modelSourceSchema,
 	messageSchema,
+	memoryEntrySchema,
 	personaSchema,
+	projectFileSchema,
+	projectSchema,
+	promptPresetSchema,
 	settingsSchema,
 	streamRequestSchema,
 	webSearchSettingsSchema,
@@ -22,6 +26,10 @@ export type LLMParams = z.infer<typeof llmParamsSchema>;
 export type Persona = z.infer<typeof personaSchema>;
 export type Chat = z.infer<typeof chatSchema>;
 export type Message = z.infer<typeof messageSchema>;
+export type Project = z.infer<typeof projectSchema>;
+export type ProjectFile = z.infer<typeof projectFileSchema>;
+export type PromptPreset = z.infer<typeof promptPresetSchema>;
+export type MemoryEntry = z.infer<typeof memoryEntrySchema>;
 export type AppSettings = z.infer<typeof appSettingsSchema>;
 export type LLMSettings = z.infer<typeof llmSettingsSchema>;
 export type WebSearchSettings = z.infer<typeof webSearchSettingsSchema>;

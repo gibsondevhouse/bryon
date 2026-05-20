@@ -47,6 +47,7 @@ let {
 	draft = $bindable(''),
 	streaming = false,
 	disabled = false,
+	webSearch = $bindable(false),
 	commandFeedback = $bindable<string | null>(null),
 	onSend,
 	onCancel,
@@ -56,8 +57,13 @@ let {
 	draft?: string;
 	streaming?: boolean;
 	disabled?: boolean;
+	webSearch?: boolean;
 	commandFeedback?: string | null;
-	onSend: (content: string, options?: { attachments?: Attachment[]; webSearch?: boolean }) => void;
+	onSend: (content: string, options?: {
+		attachments?: Attachment[];
+		projectFileIds?: string[];
+		webSearch?: boolean;
+	}) => void;
 	onCancel: () => void;
 	onSlashCommand: (input: string) => Promise<{ handled: boolean; error?: string; info?: string }>;
 } = $props();
@@ -69,9 +75,8 @@ let uploading = $state(false);
 let uploadError = $state<string | null>(null);
 let dragCounter = $state(0);
 let dragOver = $derived(dragCounter > 0);
-let webSearch = $state(false);
 
-const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
+const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
 
 function handleKeydown(event: KeyboardEvent): void {
 	if (event.key === 'Escape' && streaming) {
@@ -172,7 +177,7 @@ function addFiles(files: FileList | File[]): void {
 		}
 
 		if (file.size > MAX_FILE_SIZE) {
-			uploadError = `"${file.name}" is too large (max 20MB).`;
+			uploadError = `"${file.name}" is too large (max 25MB).`;
 			continue;
 		}
 

@@ -134,7 +134,7 @@ Read these before writing any code:
 
 | Doc | What it covers |
 | --- | --- |
-| `dev/docs/bryon-stack.md` | Full tech stack, file layout, DB schema, streaming design, API surface, boot sequence |
+| `dev/docs/stack/bryon-stack.md` | Full tech stack, file layout, DB schema, streaming design, API surface, boot sequence |
 | `dev/docs/bryon_deepseek_style_blueprint.md` | UI design system — layout, tokens, component specs |
 | `dev/docs/decisions.md` | 5 locked architectural decisions with rationale |
 | `dev/docs/slash-commands.md` | Slash command registry and implementation notes |

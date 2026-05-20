@@ -14,6 +14,7 @@ let textarea = $state<HTMLTextAreaElement | null>(null);
 const canSend = $derived(value.trim().length > 0);
 
 async function startNewChat(): Promise<void> {
+	session.draftWebSearch = mode === 'web';
 	const id = await session.createChat();
 	if (id) goto(`/chats/${id}`);
 }
@@ -24,6 +25,7 @@ async function submit(): Promise<void> {
 	const id = await session.createChat();
 	if (!id) return;
 	session.draft = content;
+	session.draftWebSearch = mode === 'web';
 	goto(`/chats/${id}`);
 }
 
@@ -117,7 +119,6 @@ function formatDate(value: number): string {
 				<button
 					type="submit"
 					class="send"
-					disabled={!canSend}
 					aria-label="Send"
 					data-testid="start-new-chat"
 					onclick={(e) => {

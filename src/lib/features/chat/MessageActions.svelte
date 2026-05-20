@@ -49,7 +49,7 @@ async function copyContent(): Promise<void> {
 }
 </script>
 
-<div class="actions" bind:this={containerEl} onkeydown={handleKeydown} role="toolbar" aria-label="Message actions">
+<div class="actions" bind:this={containerEl} onkeydown={handleKeydown} role="toolbar" tabindex="-1" aria-label="Message actions">
 	<IconActionButton
 		onclick={copyContent}
 		title={copied ? 'Copied' : 'Copy'}

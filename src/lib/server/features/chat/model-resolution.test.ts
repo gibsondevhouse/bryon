@@ -17,6 +17,7 @@ const makeChat = (overrides: Partial<Chat> = {}): Chat => ({
 	createdAt: 1,
 	updatedAt: 1,
 	archived: false,
+	projectId: null,
 	params: null,
 	...overrides,
 });

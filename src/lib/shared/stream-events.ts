@@ -43,7 +43,6 @@ export const thinkingTokenEventSchema = z.object({
 
 export const metaEventSchema = z.object({
 	assistantId: z.string().min(1),
-	requestId: z.string().min(1),
 	msToFirst: z.number().int().nonnegative(),
 	tokensIn: z.number().int().nonnegative(),
 	/** Effective context window (num_ctx) for this turn, in tokens. */
@@ -85,8 +84,6 @@ export type StreamErrorEvent = z.infer<typeof streamErrorEventSchema>;
 export type NewsArticle = z.infer<typeof newsArticleSchema>;
 export type ArticlesEvent = z.infer<typeof articlesEventSchema>;
 
-import type { StreamErrorCode as InternalStreamErrorCode } from './types';
-
 export type StreamEvent =
 	| { event: typeof STREAM_EVENT.Token; data: TokenEvent }
 	| { event: typeof STREAM_EVENT.ThinkingToken; data: ThinkingTokenEvent }
@@ -101,7 +98,6 @@ export type SessionEvent =
 	| {
 			type: 'META';
 			assistantId: string;
-			requestId: string;
 			tokensIn: number;
 			msToFirst: number;
 	  }

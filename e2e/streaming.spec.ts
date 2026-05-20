@@ -19,10 +19,10 @@ test.beforeEach(async ({ page }) => {
 	await page.route('**/api/chats/*/stream', async (route) => {
 		const body =
 			sseChunks([
+				{ event: 'meta', data: { assistantId: 'fake-id', msToFirst: 5, tokensIn: 3 } },
 				{ event: 'token', data: { delta: 'Hello' } },
 				{ event: 'token', data: { delta: ' world' } },
 				{ event: 'token', data: { delta: '!' } },
-				{ event: 'meta', data: { msToFirst: 5, tokensIn: 3 } },
 				{
 					event: 'done',
 					data: { id: 'fake-id', tokensOut: 3, msTotal: 50 },
@@ -95,8 +95,8 @@ test('error event surfaces error row with Retry, retry recovers', async ({ page 
 						},
 					])
 				: sseChunks([
+						{ event: 'meta', data: { assistantId: 'retry-id', msToFirst: 5, tokensIn: 3 } },
 						{ event: 'token', data: { delta: 'Recovered' } },
-						{ event: 'meta', data: { msToFirst: 5, tokensIn: 3 } },
 						{ event: 'done', data: { id: 'retry-id', tokensOut: 1, msTotal: 10 } },
 					]);
 		await route.fulfill({

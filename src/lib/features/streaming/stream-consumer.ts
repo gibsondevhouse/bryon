@@ -26,9 +26,11 @@ export type StreamHandlers = {
 	/** Fires for the single `meta` event. */
 	onMeta(data: {
 		assistantId: string;
-		requestId: string;
 		msToFirst: number;
 		tokensIn: number;
+		contextLimit?: number;
+		tokenBudget?: number;
+		softCapReached?: boolean;
 	}): void;
 	/** Fires when the batcher releases buffered token text. */
 	onAppend(combined: string): void;
@@ -84,12 +86,14 @@ export async function consumeSseStream(
 			}
 			case STREAM_EVENT.Meta: {
 				if (!isCurrentChat) break;
-			handlers.onMeta({
-				assistantId: event.data.assistantId,
-				msToFirst: event.data.msToFirst,
-				tokensIn: event.data.tokensIn,
-				requestId: event.data.requestId,
-			});
+				handlers.onMeta({
+					assistantId: event.data.assistantId,
+					msToFirst: event.data.msToFirst,
+					tokensIn: event.data.tokensIn,
+					contextLimit: event.data.contextLimit,
+					tokenBudget: event.data.tokenBudget,
+					softCapReached: event.data.softCapReached,
+				});
 				break;
 			}
 			case STREAM_EVENT.Done: {

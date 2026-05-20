@@ -93,8 +93,9 @@ Do not ship `/persona` or `/tools` in v1.
 
 - Add `projects` table.
 - Add nullable `chats.project_id`.
-- Project CRUD endpoints.
-- Assign/unassign chats.
+- Project CRUD endpoints: `GET/POST /api/projects`, `GET/PATCH/DELETE /api/projects/:id`.
+- Assign/unassign chats through chat create/update `projectId`.
+- `GET /api/chats?projectId=global|<id>` for scoped chat lists.
 - Non-destructive migrations only.
 
 ### Phase 13 — Project UI
@@ -108,6 +109,7 @@ Do not ship `/persona` or `/tools` in v1.
 - Upload reusable files to a project.
 - Extract text and store file metadata.
 - Explicitly attach selected project files to a chat turn.
+- `GET/POST /api/projects/:id/files`, archive via `DELETE /api/projects/:id/files/:fileId`.
 - No silent retrieval.
 
 ### Phase 15 — Prompt Library
@@ -116,6 +118,7 @@ Do not ship `/persona` or `/tools` in v1.
 - Create reusable prompt presets.
 - Apply presets to current draft or project override.
 - Project-specific prompt override.
+- APIs: `/api/prompts/default` and `/api/prompts/presets`.
 
 ### Phase 16 — Richer Memory Editing
 
@@ -123,10 +126,12 @@ Do not ship `/persona` or `/tools` in v1.
 - Enable/disable per scope.
 - Archive-ready memory representation.
 - Origin metadata if auto-memory is later added.
+- APIs: `/api/memory` and `/api/memory/:id`.
 
 ### Phase 17 — Project Knowledge Search
 
 - Search extracted project-file text.
+- `project_file_chunks` FTS and `GET /api/projects/:id/search?q=...`.
 - Optional embeddings/RAG only after explicit project-file selection and text search work.
 
 ### Phase 18 — V1.5 Hardening

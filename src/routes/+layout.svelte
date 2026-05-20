@@ -1,6 +1,6 @@
 <script lang="ts">
 import '../app.css';
-import { onMount } from 'svelte';
+import { onMount, untrack } from 'svelte';
 import favicon from '$lib/assets/favicon.svg';
 import { page } from '$app/state';
 import { PanelLeft } from '@lucide/svelte';
@@ -28,10 +28,13 @@ let hasViewportSynced = $state(false);
 const currentChatId = $derived(page.params?.id ?? null);
 
 $effect(() => {
-	session.hydrate({
-		chats: data.chats,
-		settings: data.settings,
-		ollamaReachable: healthReachable,
+	untrack(() => {
+		session.hydrate({
+			chats: data.chats,
+			projects: data.projects,
+			settings: data.settings,
+			ollamaReachable: healthReachable,
+		});
 	});
 });
 
@@ -102,8 +105,11 @@ async function probeHealth(showRetryError: boolean): Promise<void> {
 			return;
 		}
 
-		const body = (await response.json()) as { ollama?: boolean };
-		healthReachable = body.ollama ?? false;
+		const body = (await response.json()) as {
+			ollama?: boolean;
+			ollamaState?: 'unknown' | 'ready' | 'unreachable';
+		};
+		healthReachable = body.ollama ?? body.ollamaState === 'ready';
 		session.ollamaReachable = healthReachable;
 		if (showRetryError && !healthReachable) {
 			healthRetryError = 'Still unreachable. Make sure `ollama serve` is running.';

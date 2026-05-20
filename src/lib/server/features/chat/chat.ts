@@ -23,6 +23,7 @@ let supportsAttachmentsColumn: boolean | null = null;
 export type ListChatsInput = {
 	archived?: boolean;
 	includeArchived?: boolean;
+	projectId?: string | null;
 	limit?: number;
 	offset?: number;
 };
@@ -33,6 +34,7 @@ export type CreateChatInput = {
 	model?: string;
 	personaId?: string;
 	params?: Partial<LLMParams> | null;
+	projectId?: string | null;
 };
 
 export type UpdateChatInput = Partial<
@@ -40,6 +42,7 @@ export type UpdateChatInput = Partial<
 > & {
 	model?: string | null;
 	archived?: boolean;
+	projectId?: string | null;
 };
 
 export type ListMessagesInput = {
@@ -62,7 +65,13 @@ export type CreateMessageInput = {
 };
 
 export class ChatService {
-	private static listMessagesStmt: any = null;
+	private static listMessagesStmt: {
+		all(args: {
+			chatId: string;
+			beforeCreatedAt: number;
+			limit: number;
+		}): MessageRow[];
+	} | null = null;
 
 	constructor(private readonly db: Db = getDb()) {
 		this.initPreparedStatements();
@@ -92,22 +101,28 @@ export class ChatService {
 		const limit = normalizeLimit(input.limit, 50, 200);
 		const offset = Math.max(0, input.offset ?? 0);
 
-		const rows = input.includeArchived
-			? this.db
-					.select()
-					.from(chats)
-					.orderBy(desc(chats.updatedAt), desc(chats.createdAt))
-					.limit(limit)
-					.offset(offset)
-					.all()
-			: this.db
-					.select()
-					.from(chats)
-					.where(eq(chats.archived, input.archived ? 1 : 0))
-					.orderBy(desc(chats.updatedAt), desc(chats.createdAt))
-					.limit(limit)
-					.offset(offset)
-					.all();
+		const filters = [];
+		if (!input.includeArchived) {
+			filters.push(eq(chats.archived, input.archived ? 1 : 0));
+		}
+		if (input.projectId !== undefined) {
+			filters.push(
+				input.projectId === null
+					? sql`${chats.projectId} IS NULL`
+					: eq(chats.projectId, input.projectId),
+			);
+		}
+
+		const query = this.db
+			.select()
+			.from(chats)
+			.orderBy(desc(chats.updatedAt), desc(chats.createdAt))
+			.limit(limit)
+			.offset(offset);
+		const rows =
+			filters.length > 0
+				? query.where(and(...filters)).all()
+				: query.all();
 
 		return rows.map(toChat);
 	}
@@ -133,6 +148,7 @@ export class ChatService {
 				updatedAt: now,
 				archived: 0,
 				paramsJson: serializeParams(input.params),
+				projectId: input.projectId ?? null,
 			})
 			.run();
 
@@ -164,6 +180,10 @@ export class ChatService {
 		}
 		if (input.archived !== undefined) {
 			values.archived = input.archived ? 1 : 0;
+			hasChanges = true;
+		}
+		if (input.projectId !== undefined) {
+			values.projectId = input.projectId;
 			hasChanges = true;
 		}
 		if (Object.hasOwn(input, 'params')) {

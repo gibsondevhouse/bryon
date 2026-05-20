@@ -1,20 +1,27 @@
 <script lang="ts">
 import MessageList from './MessageList.svelte';
 import Composer from './Composer.svelte';
+import ProjectContextPanel from './ProjectContextPanel.svelte';
 import StatusBar from './StatusBar.svelte';
 import { session } from '$lib/features/streaming/session.svelte';
+import type { Attachment, Project, ProjectFile } from '$lib/shared/types';
 
 let {
 	chatId,
+	project = null,
+	projectFiles = [],
 }: {
 	chatId: string;
+	project?: Project | null;
+	projectFiles?: ProjectFile[];
 } = $props();
 
 let commandFeedback = $state<string | null>(null);
 let composerWithMessages: Composer | undefined = $state();
 let composerEmpty: Composer | undefined = $state();
-let emptyWebSearch = $state(false);
+let emptyWebSearch = $state(session.draftWebSearch);
 let emptyMode = $derived<'chat' | 'web'>(emptyWebSearch ? 'web' : 'chat');
+let selectedProjectFileIds = $state<string[]>([]);
 
 const hasMessages = $derived(
 	session.messages.some((m) => m.role !== 'system') || session.streaming,
@@ -35,9 +42,12 @@ const contextTokens = $derived(session.metrics?.tokensIn ?? 0);
 
 function handleSend(
 	content: string,
-	options?: { attachments?: import('$lib/shared/types').Attachment[]; webSearch?: boolean },
+	options?: { attachments?: Attachment[]; projectFileIds?: string[]; webSearch?: boolean },
 ): void {
-	void session.send(chatId, content, options);
+	const projectFileIds = selectedProjectFileIds;
+	void session.send(chatId, content, { ...options, projectFileIds }).then(() => {
+		selectedProjectFileIds = [];
+	});
 }
 
 function handleCancel(): void {
@@ -75,6 +85,14 @@ $effect(() => {
 			thinkingDurationByMessageId={session.thinkingDurationByMessageId}
 			onRetry={handleRetry}
 		/>
+
+		{#if project}
+			<ProjectContextPanel
+				{project}
+				initialFiles={projectFiles}
+				bind:selectedFileIds={selectedProjectFileIds}
+			/>
+		{/if}
 
 		<Composer
 			bind:this={composerWithMessages}
@@ -137,6 +155,14 @@ $effect(() => {
 					onCancel={handleCancel}
 					onSlashCommand={handleSlashCommand}
 				/>
+
+				{#if project}
+					<ProjectContextPanel
+						{project}
+						initialFiles={projectFiles}
+						bind:selectedFileIds={selectedProjectFileIds}
+					/>
+				{/if}
 			</div>
 		</div>
 
