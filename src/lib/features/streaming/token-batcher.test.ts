@@ -3,10 +3,15 @@ import { createTokenBatcher } from './token-batcher';
 
 describe('token-batcher', () => {
 	it('flushes accumulated deltas after the interval', () => {
-		vi.useFakeTimers();
+		let rafCallback: FrameRequestCallback | null = null;
+		vi.stubGlobal('requestAnimationFrame', vi.fn((cb) => {
+			rafCallback = cb;
+			return 1;
+		}));
+		vi.stubGlobal('cancelAnimationFrame', vi.fn());
+
 		const flushes: string[] = [];
 		const batcher = createTokenBatcher({
-			flushIntervalMs: 50,
 			onFlush: (combined) => flushes.push(combined),
 		});
 
@@ -14,61 +19,82 @@ describe('token-batcher', () => {
 		batcher.push('lo');
 		expect(flushes).toEqual([]);
 
-		vi.advanceTimersByTime(50);
+		(rafCallback as FrameRequestCallback | null)?.(0);
 		expect(flushes).toEqual(['Hello']);
-		vi.useRealTimers();
+
+		vi.unstubAllGlobals();
 	});
 
 	it('does not flush empty buffers', () => {
-		vi.useFakeTimers();
+		let rafCallback: FrameRequestCallback | null = null;
+		vi.stubGlobal('requestAnimationFrame', vi.fn((cb) => {
+			rafCallback = cb;
+			return 1;
+		}));
+
 		const flushes: string[] = [];
 		const batcher = createTokenBatcher({
-			flushIntervalMs: 50,
 			onFlush: (combined) => flushes.push(combined),
 		});
 		batcher.push('');
-		vi.advanceTimersByTime(50);
+		(rafCallback as FrameRequestCallback | null)?.(0);
 		expect(flushes).toEqual([]);
-		vi.useRealTimers();
+
+		vi.unstubAllGlobals();
 	});
 
 	it('flush() drains immediately', () => {
+		vi.stubGlobal('requestAnimationFrame', vi.fn());
 		const flushes: string[] = [];
 		const batcher = createTokenBatcher({
-			flushIntervalMs: 50,
 			onFlush: (combined) => flushes.push(combined),
 		});
 		batcher.push('abc');
 		batcher.flush();
 		expect(flushes).toEqual(['abc']);
+		vi.unstubAllGlobals();
 	});
 
 	it('dispose() drops pending deltas without flushing', () => {
-		vi.useFakeTimers();
+		let rafCallback: FrameRequestCallback | null = null;
+		vi.stubGlobal('requestAnimationFrame', vi.fn((cb) => {
+			rafCallback = cb;
+			return 1;
+		}));
+		vi.stubGlobal('cancelAnimationFrame', vi.fn());
+
 		const flushes: string[] = [];
 		const batcher = createTokenBatcher({
-			flushIntervalMs: 50,
 			onFlush: (combined) => flushes.push(combined),
 		});
 		batcher.push('abc');
 		batcher.dispose();
-		vi.advanceTimersByTime(100);
+		(rafCallback as FrameRequestCallback | null)?.(0);
 		expect(flushes).toEqual([]);
-		vi.useRealTimers();
+		vi.unstubAllGlobals();
 	});
 
 	it('starts a new timer after a flush', () => {
-		vi.useFakeTimers();
+		let rafCallback: FrameRequestCallback | null = null;
+		vi.stubGlobal('requestAnimationFrame', vi.fn((cb) => {
+			rafCallback = cb;
+			return 1;
+		}));
+		vi.stubGlobal('cancelAnimationFrame', vi.fn());
+
 		const flushes: string[] = [];
 		const batcher = createTokenBatcher({
-			flushIntervalMs: 50,
 			onFlush: (combined) => flushes.push(combined),
 		});
+
 		batcher.push('a');
-		vi.advanceTimersByTime(50);
+		(rafCallback as FrameRequestCallback | null)?.(0);
+		rafCallback = null;
+
 		batcher.push('b');
-		vi.advanceTimersByTime(50);
+		(rafCallback as FrameRequestCallback | null)?.(0);
+
 		expect(flushes).toEqual(['a', 'b']);
-		vi.useRealTimers();
+		vi.unstubAllGlobals();
 	});
 });

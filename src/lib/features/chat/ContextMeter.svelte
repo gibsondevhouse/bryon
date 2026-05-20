@@ -5,22 +5,35 @@ import { defaultLLMParams } from '$lib/shared/schemas';
 const RADIUS = 7;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
+// Prefer per-turn budget reported by the server when available; fall back to
+// the configured num_ctx so the meter still renders before the first turn.
 const max = $derived(
-	session.settings?.llm.params.num_ctx ?? defaultLLMParams.num_ctx,
+	session.contextBudget?.contextLimit ??
+		session.settings?.llm.params.num_ctx ??
+		defaultLLMParams.num_ctx,
 );
-const used = $derived(session.metrics?.tokensIn ?? 0);
+const used = $derived(
+	session.contextBudget?.tokensIn ?? session.metrics?.tokensIn ?? 0,
+);
 const pct = $derived(Math.min(1, max > 0 ? used / max : 0));
 const percentLabel = $derived(`${Math.round(pct * 100)}%`);
 const dashOffset = $derived(CIRCUMFERENCE * (1 - pct));
+const softCapReached = $derived(session.contextBudget?.softCapReached ?? false);
 
 const tone = $derived(
-	pct >= 0.85 ? 'danger' : pct >= 0.6 ? 'warn' : 'ok',
+	softCapReached || pct >= 0.85
+		? 'danger'
+		: pct >= 0.6
+			? 'warn'
+			: 'ok',
 );
 
 const title = $derived(
-	used > 0
-		? `Context used: ${used.toLocaleString()} / ${max.toLocaleString()} tokens (${percentLabel})`
-		: `Context window: ${max.toLocaleString()} tokens`,
+	softCapReached
+		? `Soft cap reached — earlier turns were summarized. Used ${used.toLocaleString()} / ${max.toLocaleString()} tokens (${percentLabel}).`
+		: used > 0
+			? `Context used: ${used.toLocaleString()} / ${max.toLocaleString()} tokens (${percentLabel})`
+			: `Context window: ${max.toLocaleString()} tokens`,
 );
 </script>
 

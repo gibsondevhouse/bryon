@@ -137,7 +137,12 @@ function sanitizeSnippet(html: string): string {
 				bind:value={query}
 				onkeydown={onKey}
 				placeholder="Search messages..."
-				aria-label="Search messages"
+				role="combobox"
+				aria-autocomplete="list"
+				aria-expanded={results.length > 0}
+				aria-controls="search-results"
+				aria-haspopup="listbox"
+				aria-activedescendant={results.length > 0 ? `result-${activeIndex}` : undefined}
 				autocomplete="off"
 				spellcheck="false"
 			/>
@@ -146,7 +151,17 @@ function sanitizeSnippet(html: string): string {
 			</button>
 		</div>
 
-		<div class="results">
+		<div class="results" id="search-results" role="listbox">
+			<div class="sr-only" aria-live="polite">
+				{#if loading}
+					Searching…
+				{:else if query && results.length === 0}
+					No matches found
+				{:else if results.length > 0}
+					{results.length} results found
+				{/if}
+			</div>
+
 			{#if loading}
 				<div class="status">Searching…</div>
 			{:else if !query.trim()}
@@ -154,12 +169,15 @@ function sanitizeSnippet(html: string): string {
 			{:else if results.length === 0}
 				<div class="status">No matches found</div>
 			{:else}
-				<ul>
+				<ul role="presentation">
 					{#each results as result, i}
-						<li>
+						<li role="presentation">
 							<button
+								id="result-{i}"
 								type="button"
 								class="row"
+								role="option"
+								aria-selected={i === activeIndex}
 								class:active={i === activeIndex}
 								onmouseenter={() => (activeIndex = i)}
 								onclick={() => jumpTo(result)}

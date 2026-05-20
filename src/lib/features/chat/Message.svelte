@@ -1,13 +1,14 @@
 <script lang="ts">
-import { marked } from 'marked';
-import { RotateCcw, Bot, FileText } from '@lucide/svelte';
+import { RotateCcw } from '@lucide/svelte';
 import type { Attachment, Message } from '$lib/shared/types';
 import type { NewsArticle } from '$lib/shared/stream-events';
 import MessageActions from './MessageActions.svelte';
 import MessageMeta from './primitives/MessageMeta.svelte';
 import ArticlesCarousel from './ArticlesCarousel.svelte';
-import { sanitizeAssistantHtml } from './sanitize';
-import { enhanceCodeBlocks } from './code-enhancer';	import { stabilizeMarkdown } from './streaming-markdown';import ThinkingChip from './ThinkingChip.svelte';
+import ThinkingChip from './ThinkingChip.svelte';
+import MessageHeader from './MessageHeader.svelte';
+import AssistantMarkdown from './AssistantMarkdown.svelte';
+import UserMessage from './UserMessage.svelte';
 import { session } from '$lib/features/streaming/session.svelte';
 
 let {
@@ -30,7 +31,6 @@ let {
 
 function openActivity(): void {
 	if (isStreaming) {
-		// For the streaming placeholder, use a stable virtual id
 		session.openActivityFor('streaming');
 		return;
 	}
@@ -53,14 +53,6 @@ const isCancelled = $derived(
 		message.content.length > 0,
 );
 
-const renderedHtml = $derived.by(() => {
-	if (!content) return '';
-	if (role === 'user') return escapeHtml(content);
-	const source = isStreaming ? stabilizeMarkdown(content) : content;
-	const html = marked.parse(source, { async: false, breaks: true }) as string;
-	return sanitizeAssistantHtml(html);
-});
-
 const timestamp = $derived.by(() => {
 	if (isStreaming || !message?.createdAt) return null;
 	const d = new Date(message.createdAt);
@@ -75,14 +67,6 @@ const timestamp = $derived.by(() => {
 	return { short: time, full };
 });
 
-function escapeHtml(text: string): string {
-	return text
-		.replace(/&/g, '&amp;')
-		.replace(/</g, '&lt;')
-		.replace(/>/g, '&gt;')
-		.replace(/\n/g, '<br>');
-}
-
 const attachments = $derived.by((): Attachment[] => {
 	const json = isStreaming ? null : (message?.attachmentsJson ?? null);
 	if (!json) return [];
@@ -92,8 +76,6 @@ const attachments = $derived.by((): Attachment[] => {
 		return [];
 	}
 });
-const imageAttachments = $derived(attachments.filter((att) => att.kind === 'image'));
-const documentAttachments = $derived(attachments.filter((att) => att.kind === 'document'));
 
 let lightboxSrc = $state<string | null>(null);
 
@@ -109,78 +91,36 @@ function handleLightboxClick(event: MouseEvent): void {
 function handleLightboxKeydown(event: KeyboardEvent): void {
 	if (event.key === 'Escape') closeLightbox();
 }
-
-let proseEl: HTMLDivElement | undefined = $state();
-
-$effect(() => {
-	// Re-run on content changes; only enhance once finalized (skip during streaming).
-	void renderedHtml;
-	if (!proseEl) return;
-	if (isStreaming) return;
-	if (role !== 'assistant') return;
-	void enhanceCodeBlocks(proseEl);
-});
 </script>
 
 {#if role === 'system' || role === 'tool_call' || role === 'tool_result'}
 	<!-- hidden -->
 {:else if role === 'user'}
-	<div class="msg msg-user">
-		{#if imageAttachments.length > 0}
-			<div class="msg-images">
-				{#each imageAttachments as att (att.id)}
-					<button
-						class="msg-img-btn"
-						onclick={() => openLightbox(`/api/chats/image?path=${encodeURIComponent(att.path)}`)}
-						title="View full size"
-						aria-label="View image"
-					>
-						<img
-							src="/api/chats/image?path={encodeURIComponent(att.path)}"
-							alt="Attachment preview"
-							class="msg-img"
-						/>
-					</button>
-				{/each}
-			</div>
-		{/if}
-		{#if documentAttachments.length > 0}
-			<div class="msg-docs">
-				{#each documentAttachments as att (att.id)}
-					<div class="msg-doc" title={att.name}>
-						<FileText size={14} />
-						<span>{att.title ?? att.name}</span>
-					</div>
-				{/each}
-			</div>
-		{/if}
-		<div class="user-bubble">
-			<div class="prose">{@html renderedHtml}</div>
-		</div>
+	<article class="msg-container" aria-label="Message from user">
+		<UserMessage {content} {attachments} onOpenLightbox={openLightbox} />
 		{#if timestamp}
-			<time class="ts ts-user" datetime={new Date(message?.createdAt ?? 0).toISOString()} title={timestamp.full}>
-				<MessageMeta value={timestamp.short} kind="timestamp" />
-			</time>
+			<div class="msg-user">
+				<time class="ts ts-user" datetime={new Date(message?.createdAt ?? 0).toISOString()} title={timestamp.full}>
+					<MessageMeta value={timestamp.short} kind="timestamp" />
+				</time>
+			</div>
 		{/if}
-	</div>
 
-	{#if lightboxSrc}
-		<dialog
-			class="lightbox"
-			open
-			onclick={handleLightboxClick}
-			onkeydown={handleLightboxKeydown}
-			aria-label="Image preview"
-		>
-			<img src={lightboxSrc} alt="Full-size preview" class="lightbox-img" />
-		</dialog>
-	{/if}
+		{#if lightboxSrc}
+			<dialog
+				class="lightbox"
+				open
+				onclick={handleLightboxClick}
+				onkeydown={handleLightboxKeydown}
+				aria-label="Image preview"
+			>
+				<img src={lightboxSrc} alt="Full-size preview" class="lightbox-img" />
+			</dialog>
+		{/if}
+	</article>
 {:else}
-	<div class="msg msg-assistant" class:streaming={isStreaming}>
-		<div class="assistant-label">
-			<span class="bot-icon"><Bot size={14} strokeWidth={2} /></span>
-			<span>Bryon</span>
-		</div>
+	<article class="msg msg-assistant" class:streaming={isStreaming} aria-label="Message from Bryon">
+		<MessageHeader />
 
 		<div class="assistant-body">
 			{#if thinking || isStreaming}
@@ -193,7 +133,7 @@ $effect(() => {
 			{/if}
 
 			{#if content}
-				<div class="prose" bind:this={proseEl}>{@html renderedHtml}</div>
+				<AssistantMarkdown {content} {isStreaming} />
 			{:else if isStreaming}
 				<span class="dots"><span></span><span></span><span></span></span>
 			{/if}
@@ -229,29 +169,13 @@ $effect(() => {
 				{/if}
 			{/if}
 		</div>
-	</div>
+	</article>
 {/if}
 
 <style>
 /* ── Message block ── */
 .msg {
 	padding: var(--sp-5) 0;
-}
-
-/* ── User message ── */
-.msg-user {
-	display: flex;
-	flex-direction: column;
-	align-items: flex-end;
-	justify-content: flex-end;
-}
-
-.user-bubble {
-	max-width: 85%;
-	padding: var(--sp-3) var(--sp-4);
-	border-radius: var(--radius-lg) var(--radius-lg) var(--sp-1) var(--radius-lg);
-	background: var(--bg-user-msg);
-	border: 1px solid var(--border-subtle);
 }
 
 .ts {
@@ -270,225 +194,8 @@ $effect(() => {
 	opacity: 1;
 }
 
-/* ── Assistant message ── */
-.assistant-label {
-	display: flex;
-	align-items: center;
-	gap: var(--sp-2);
-	margin-bottom: var(--sp-3);
-	font-size: 13px;
-	font-weight: 600;
-	color: var(--text-secondary);
-}
-
-.bot-icon {
-	display: grid;
-	place-items: center;
-	width: 22px;
-	height: 22px;
-	border-radius: 6px;
-	background: var(--accent);
-	color: white;
-}
-
 .assistant-body {
 	padding-left: 30px; /* align with text after icon + gap */
-}
-
-/* ── Prose (markdown) ── */
-.prose {
-	font-size: 15px;
-	line-height: 1.75;
-	color: var(--text-primary);
-	word-wrap: break-word;
-	overflow-wrap: break-word;
-}
-
-.prose :global(p)            { margin: 0 0 var(--sp-3); }
-.prose :global(p:last-child) { margin: 0; }
-
-.prose :global(pre) {
-	margin: var(--sp-4) 0;
-	border: 1px solid var(--border-default);
-	border-radius: var(--radius-sm);
-	background: var(--bg-code);
-	padding: var(--sp-4);
-	overflow-x: auto;
-	color: #cdd6f4;
-	font-size: 13px;
-	line-height: 1.6;
-}
-
-/* ── Shiki-enhanced code block ── */
-.prose :global(.code-block) {
-	margin: var(--sp-4) 0;
-	border: 1px solid var(--border-default);
-	border-radius: var(--radius-sm);
-	overflow: hidden;
-	background: #fff;
-}
-.prose :global(.code-block .code-header) {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: var(--sp-2);
-	padding: 4px var(--sp-2) 4px var(--sp-3);
-	border-bottom: 1px solid var(--border-subtle);
-	background: var(--bg-surface);
-	font-size: 11px;
-	color: var(--text-muted);
-	font-family: 'SF Mono', 'JetBrains Mono', ui-monospace, monospace;
-}
-.prose :global(.code-block .code-lang) {
-	text-transform: lowercase;
-	letter-spacing: 0.04em;
-}
-.prose :global(.code-block .code-copy) {
-	border: 1px solid transparent;
-	border-radius: 4px;
-	background: transparent;
-	color: var(--text-muted);
-	font-family: inherit;
-	font-size: 11px;
-	padding: 2px 8px;
-	cursor: pointer;
-}
-.prose :global(.code-block .code-copy:hover) {
-	background: var(--bg-surface-hover);
-	color: var(--text-primary);
-}
-.prose :global(.code-block .code-copy.copied) {
-	color: var(--green);
-}
-.prose :global(.code-block .code-body) {
-	overflow-x: auto;
-	font-size: 13px;
-	line-height: 1.55;
-}
-.prose :global(.code-block .code-body pre) {
-	margin: 0;
-	border: none;
-	border-radius: 0;
-	padding: var(--sp-3) var(--sp-4);
-	background: #fff !important;
-	color: inherit;
-	font-size: 13px;
-	overflow: visible;
-}
-.prose :global(.code-block .code-body code) {
-	font-size: 13px;
-	background: transparent;
-	padding: 0;
-	color: inherit;
-}
-
-.prose :global(code) {
-	font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', ui-monospace, monospace;
-	font-size: 0.88em;
-}
-
-.prose :global(:not(pre) > code) {
-	border-radius: 5px;
-	background: var(--accent-soft);
-	padding: 2px 7px;
-	color: var(--accent-text);
-}
-
-.prose :global(ul),
-.prose :global(ol) { margin: var(--sp-2) 0; padding-left: 22px; }
-.prose :global(li)  { margin-bottom: var(--sp-1); }
-.prose :global(li::marker) { color: var(--text-muted); }
-
-.prose :global(blockquote) {
-	margin: var(--sp-4) 0;
-	border-left: 3px solid var(--accent);
-	padding: var(--sp-1) 0 var(--sp-1) var(--sp-4);
-	color: var(--text-secondary);
-}
-
-.prose :global(h1),
-.prose :global(h2),
-.prose :global(h3) {
-	margin: var(--sp-6) 0 var(--sp-2);
-	font-weight: 650;
-	color: var(--text-primary);
-	line-height: 1.4;
-}
-.prose :global(h1) { font-size: 1.3em; }
-.prose :global(h2) { font-size: 1.15em; }
-.prose :global(h3) { font-size: 1.05em; }
-
-.prose :global(table) {
-	width: 100%; margin: var(--sp-4) 0; border-collapse: collapse; font-size: 14px;
-}
-.prose :global(th),
-.prose :global(td) {
-	border: 1px solid var(--border-default); padding: var(--sp-2) var(--sp-3); text-align: left;
-}
-.prose :global(th) { background: var(--bg-surface); font-weight: 600; }
-
-.prose :global(hr) {
-	margin: var(--sp-6) 0; border: none; border-top: 1px solid var(--border-subtle);
-}
-.prose :global(a)       { color: var(--accent-text); text-decoration: none; }
-.prose :global(a:hover) { text-decoration: underline; }
-.prose :global(strong)  { font-weight: 650; color: var(--text-primary); }
-
-/* ── Image attachments ── */
-.msg-images {
-	display: flex;
-	flex-wrap: wrap;
-	justify-content: flex-end;
-	gap: var(--sp-2);
-	margin-bottom: var(--sp-2);
-	max-width: 85%;
-}
-
-.msg-img-btn {
-	padding: 0;
-	background: none;
-	border: none;
-	cursor: zoom-in;
-	border-radius: var(--radius-sm);
-	overflow: hidden;
-	flex-shrink: 0;
-}
-
-.msg-img {
-	display: block;
-	max-width: 200px;
-	max-height: 180px;
-	object-fit: cover;
-	border-radius: var(--radius-sm);
-	border: 1px solid var(--border-subtle);
-}
-
-.msg-docs {
-	display: flex;
-	flex-wrap: wrap;
-	justify-content: flex-end;
-	gap: var(--sp-2);
-	margin-bottom: var(--sp-2);
-	max-width: 85%;
-}
-
-.msg-doc {
-	display: inline-flex;
-	align-items: center;
-	gap: var(--sp-2);
-	max-width: 260px;
-	padding: var(--sp-2) var(--sp-3);
-	border: 1px solid var(--border-subtle);
-	border-radius: var(--radius-sm);
-	background: var(--bg-surface);
-	color: var(--text-secondary);
-	font-size: 12px;
-}
-
-.msg-doc span {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
 }
 
 /* ── Lightbox ── */

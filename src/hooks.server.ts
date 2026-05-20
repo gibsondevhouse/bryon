@@ -12,6 +12,7 @@ import {
 	ensureSchemaCompatibility,
 	setRuntimeReadiness,
 } from '$lib/server/runtime/readiness';
+import { getOllamaSupervisor } from '$lib/server/llm/supervisor';
 
 export type BootState = {
 	config: LoadedConfig['config'];
@@ -103,19 +104,13 @@ async function bootServer(): Promise<BootState> {
 	seedPersonas();
 	registerShutdownHandlers();
 
-	const ollamaReachable = await pingOllama(loaded.config.llm.base_url);
-	if (!ollamaReachable) {
-		logger.warn(
-			{ baseUrl: loaded.config.llm.base_url },
-			'Ollama not reachable; start Ollama and reload',
-		);
-	}
+	const ollamaSupervisor = getOllamaSupervisor(loaded.config.llm.base_url);
+	ollamaSupervisor.start();
 
 	logger.info(
 		{
 			configPath: loaded.configPath,
 			dbPath: getDbPath(),
-			ollamaReachable,
 		},
 		'server boot complete',
 	);
@@ -125,7 +120,7 @@ async function bootServer(): Promise<BootState> {
 		configPath: loaded.configPath,
 		configParseError: loaded.parseError?.message ?? null,
 		dbPath: getDbPath(),
-		ollamaReachable,
+		ollamaReachable: ollamaSupervisor.getState() === 'ready',
 	};
 }
 
@@ -160,22 +155,6 @@ function seedPersonas(): void {
 				})
 				.run();
 		}
-	}
-}
-
-async function pingOllama(baseUrl: string): Promise<boolean> {
-	const controller = new AbortController();
-	const timeout = setTimeout(() => controller.abort(), 1_500);
-
-	try {
-		const response = await fetch(new URL('/api/tags', baseUrl), {
-			signal: controller.signal,
-		});
-		return response.ok;
-	} catch {
-		return false;
-	} finally {
-		clearTimeout(timeout);
 	}
 }
 

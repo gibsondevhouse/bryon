@@ -81,6 +81,12 @@ export async function highlightToHtml(
 	return html;
 }
 
+export function getCachedHighlight(lang: string, code: string): string | null {
+	const normalized = lang.toLowerCase().trim();
+	const key = cacheKey(normalized, code);
+	return cache.get(key) ?? null;
+}
+
 export function isSupportedLang(lang: string): boolean {
 	return (SUPPORTED_LANGS as readonly string[]).includes(lang.toLowerCase().trim());
 }

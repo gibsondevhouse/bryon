@@ -34,9 +34,12 @@ const ACCEPTED_EXTENSIONS = [
 ];
 
 type PendingAttachment = {
+	id: string;
 	previewUrl: string;
 	file: File;
 	kind: 'image' | 'document';
+	state: 'queued' | 'processing' | 'ready' | 'error';
+	error?: string;
 };
 
 let {
@@ -44,6 +47,7 @@ let {
 	draft = $bindable(''),
 	streaming = false,
 	disabled = false,
+	webSearch = $bindable(false),
 	commandFeedback = $bindable<string | null>(null),
 	onSend,
 	onCancel,
@@ -53,8 +57,13 @@ let {
 	draft?: string;
 	streaming?: boolean;
 	disabled?: boolean;
+	webSearch?: boolean;
 	commandFeedback?: string | null;
-	onSend: (content: string, options?: { attachments?: Attachment[]; webSearch?: boolean }) => void;
+	onSend: (content: string, options?: {
+		attachments?: Attachment[];
+		projectFileIds?: string[];
+		webSearch?: boolean;
+	}) => void;
 	onCancel: () => void;
 	onSlashCommand: (input: string) => Promise<{ handled: boolean; error?: string; info?: string }>;
 } = $props();
@@ -64,8 +73,10 @@ let fileInput: HTMLInputElement | undefined = $state();
 let pending = $state<PendingAttachment[]>([]);
 let uploading = $state(false);
 let uploadError = $state<string | null>(null);
-let dragOver = $state(false);
-let webSearch = $state(false);
+let dragCounter = $state(0);
+let dragOver = $derived(dragCounter > 0);
+
+const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
 
 function handleKeydown(event: KeyboardEvent): void {
 	if (event.key === 'Escape' && streaming) {
@@ -150,17 +161,37 @@ function handleInput(): void {
 }
 
 function addFiles(files: FileList | File[]): void {
-	const arr = Array.from(files).filter((file) => isAccepted(file));
-	if (arr.length === 0) {
-		uploadError = 'Unsupported file type. Accepted: PNG, JPEG, WebP, PDF, TXT, MD, HTML, DOCX, XLSX, PPTX.';
-		return;
-	}
 	uploadError = null;
-	for (const file of arr) {
-		const kind = file.type.startsWith('image/') || isImageName(file.name) ? 'image' : 'document';
+	const newPending: PendingAttachment[] = [];
+
+	for (const file of Array.from(files)) {
+		const id = Math.random().toString(36).slice(2);
+		const kind =
+			file.type.startsWith('image/') || isImageName(file.name)
+				? 'image'
+				: 'document';
+
+		if (!isAccepted(file)) {
+			uploadError = `"${file.name}" is an unsupported file type.`;
+			continue;
+		}
+
+		if (file.size > MAX_FILE_SIZE) {
+			uploadError = `"${file.name}" is too large (max 25MB).`;
+			continue;
+		}
+
 		const previewUrl = kind === 'image' ? URL.createObjectURL(file) : '';
-		pending = [...pending, { previewUrl, file, kind }];
+		newPending.push({
+			id,
+			previewUrl,
+			file,
+			kind,
+			state: 'ready',
+		});
 	}
+
+	pending = [...pending, ...newPending];
 }
 
 function removeAttachment(index: number): void {
@@ -181,18 +212,24 @@ function handleFileInputChange(event: Event): void {
 	input.value = '';
 }
 
+function handleDragEnter(event: DragEvent): void {
+	event.preventDefault();
+	if (event.dataTransfer?.types.includes('Files')) {
+		dragCounter++;
+	}
+}
+
 function handleDragOver(event: DragEvent): void {
 	event.preventDefault();
-	if (event.dataTransfer?.types.includes('Files')) dragOver = true;
 }
 
 function handleDragLeave(): void {
-	dragOver = false;
+	dragCounter = Math.max(0, dragCounter - 1);
 }
 
 function handleDrop(event: DragEvent): void {
 	event.preventDefault();
-	dragOver = false;
+	dragCounter = 0;
 	const files = event.dataTransfer?.files;
 	if (files?.length) addFiles(files);
 }
@@ -231,10 +268,19 @@ export function focus(): void {
 	class:drag-active={dragOver}
 	role="region"
 	aria-label="Message composer"
+	ondragenter={handleDragEnter}
 	ondragover={handleDragOver}
 	ondragleave={handleDragLeave}
 	ondrop={handleDrop}
 >
+	{#if dragOver}
+		<div class="drag-overlay">
+			<div class="drag-prompt">
+				<Paperclip size={24} />
+				<span>Drop to attach</span>
+			</div>
+		</div>
+	{/if}
 	{#if commandFeedback}
 		<ComposerFeedback message={commandFeedback} />
 	{/if}
@@ -245,8 +291,8 @@ export function focus(): void {
 
 	{#if pending.length > 0}
 		<div class="thumb-strip">
-			{#each pending as p, i (`${p.file.name}-${p.file.size}-${i}`)}
-				<div class="thumb">
+			{#each pending as p, i (p.id)}
+				<div class="thumb" class:uploading={uploading}>
 					{#if p.kind === 'image'}
 						<img src={p.previewUrl} alt="attachment {i + 1}" />
 					{:else}
@@ -255,7 +301,20 @@ export function focus(): void {
 							<span>{p.file.name}</span>
 						</div>
 					{/if}
-					<button class="thumb-remove" onclick={() => removeAttachment(i)} title="Remove" aria-label="Remove attachment">
+
+					{#if uploading}
+						<div class="thumb-overlay">
+							<span class="spinner"></span>
+						</div>
+					{/if}
+
+					<button
+						class="thumb-remove"
+						onclick={() => removeAttachment(i)}
+						disabled={uploading}
+						title="Remove"
+						aria-label="Remove attachment"
+					>
 						<X size={10} />
 					</button>
 				</div>
@@ -331,8 +390,34 @@ export function focus(): void {
 
 .composer-wrap.drag-active {
 	background: var(--accent-soft);
-	outline: 2px dashed var(--primary);
-	outline-offset: -2px;
+}
+
+.drag-overlay {
+	position: absolute;
+	inset: 0;
+	z-index: 50;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: var(--accent-soft);
+	border: 2px dashed var(--accent);
+	border-radius: var(--radius-xl);
+	pointer-events: none;
+	animation: fadeIn 0.15s ease-out;
+}
+
+.drag-prompt {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: var(--sp-2);
+	color: var(--accent);
+	font-weight: 600;
+}
+
+@keyframes fadeIn {
+	from { opacity: 0; }
+	to { opacity: 1; }
 }
 
 /* ── Thumbnail strip ── */
@@ -351,6 +436,32 @@ export function focus(): void {
 	overflow: hidden;
 	border: 1px solid var(--border-default);
 	flex-shrink: 0;
+	transition: opacity 0.2s;
+}
+
+.thumb.uploading {
+	opacity: 0.7;
+}
+
+.thumb-overlay {
+	position: absolute;
+	inset: 0;
+	background: rgba(0, 0, 0, 0.4);
+	display: grid;
+	place-items: center;
+}
+
+.spinner {
+	width: 16px;
+	height: 16px;
+	border: 2px solid rgba(255, 255, 255, 0.3);
+	border-top-color: white;
+	border-radius: 50%;
+	animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+	to { transform: rotate(360deg); }
 }
 
 .doc-thumb {

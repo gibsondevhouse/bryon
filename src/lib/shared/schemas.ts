@@ -1,11 +1,11 @@
 import { z } from 'zod';
 
 export const defaultLLMParams = {
-	temperature: 0.6,
-	top_p: 0.9,
-	top_k: 40,
+	temperature: 1.0,
+	top_p: 0.95,
+	top_k: 64,
 	repeat_penalty: 1.1,
-	num_ctx: 8192,
+	num_ctx: 16384,
 	num_predict: 1024,
 	keep_alive: '10m',
 } as const;
@@ -19,7 +19,7 @@ export const defaultAppSettings = {
 export const defaultLLMSettings = {
 	backend: 'ollama',
 	base_url: 'http://127.0.0.1:11434',
-	model: 'gemma3:4b',
+	model: 'gemma4:e4b',
 	vision_model: 'gemma4:e4b',
 	thinking: 'normal' as 'off' | 'auto' | 'light' | 'normal' | 'extended',
 	params: defaultLLMParams,
@@ -28,7 +28,7 @@ export const defaultLLMSettings = {
 export const defaultWebSearchSettings = {
 	enabled: true,
 	searxng_url: '',
-	max_results: 10,
+	max_results: 5,
 } as const;
 
 export const defaultMemorySettings = {
@@ -93,6 +93,7 @@ export const chatSchema = z.object({
 	updatedAt: z.number().int().nonnegative(),
 	archived: z.boolean().default(false),
 	params: llmParamsSchema.partial().nullable().default(null),
+	projectId: z.string().min(1).nullable().default(null),
 });
 
 export const attachmentKindSchema = z.enum(['image', 'document']);
@@ -124,6 +125,54 @@ export const messageSchema = z.object({
 	createdAt: z.number().int().nonnegative(),
 	summarized: z.boolean().default(false),
 	attachmentsJson: z.string().nullable().default(null),
+});
+
+export const projectSchema = z.object({
+	id: z.string().min(1),
+	name: z.string().min(1),
+	description: z.string().nullable().default(null),
+	promptOverride: z.string().nullable().default(null),
+	memoryEnabled: z.boolean().default(true),
+	remember: z.string().default(''),
+	neverSuggest: z.string().default(''),
+	archivedAt: z.number().int().nonnegative().nullable().default(null),
+	createdAt: z.number().int().nonnegative(),
+	updatedAt: z.number().int().nonnegative(),
+});
+
+export const projectFileSchema = z.object({
+	id: z.string().min(1),
+	projectId: z.string().min(1),
+	name: z.string().min(1),
+	mime: z.string().min(1),
+	kind: attachmentKindSchema,
+	path: z.string().min(1),
+	textPath: z.string().min(1).nullable().default(null),
+	sizeBytes: z.number().int().nonnegative(),
+	textBytes: z.number().int().nonnegative().nullable().default(null),
+	archivedAt: z.number().int().nonnegative().nullable().default(null),
+	createdAt: z.number().int().nonnegative(),
+});
+
+export const promptPresetSchema = z.object({
+	id: z.string().min(1),
+	name: z.string().min(1),
+	body: z.string().min(1),
+	createdAt: z.number().int().nonnegative(),
+	updatedAt: z.number().int().nonnegative(),
+});
+
+export const memoryEntrySchema = z.object({
+	id: z.string().min(1),
+	scope: z.enum(['global', 'project']),
+	projectId: z.string().min(1).nullable().default(null),
+	kind: z.enum(['remember', 'never_suggest']),
+	body: z.string().min(1),
+	enabled: z.boolean().default(true),
+	origin: z.enum(['user', 'imported', 'model_suggested']).default('user'),
+	archivedAt: z.number().int().nonnegative().nullable().default(null),
+	createdAt: z.number().int().nonnegative(),
+	updatedAt: z.number().int().nonnegative(),
 });
 
 export const appSettingsSchema = z.object({
@@ -169,6 +218,7 @@ export const streamRequestSchema = z.object({
 	content: z.string().trim().min(1),
 	paramsOverride: llmParamsSchema.partial().optional(),
 	attachments: z.array(attachmentSchema).optional(),
+	projectFileIds: z.array(z.string().min(1)).optional(),
 	webSearch: z.boolean().optional().default(false),
 	thinkingMode: z.enum(['off', 'auto', 'light', 'normal', 'extended']).optional(),
 });

@@ -94,8 +94,8 @@ test('long-thread virtualization keeps DOM bounded and scroll interactions fast'
 			status: 200,
 			headers: { 'Content-Type': 'text/event-stream' },
 			body: sseChunks([
+				{ event: 'meta', data: { assistantId: `stub-${Date.now()}`, msToFirst: 5, tokensIn: 12 } },
 				{ event: 'token', data: { delta: 'Ack' } },
-				{ event: 'meta', data: { msToFirst: 5, tokensIn: 12 } },
 				{ event: 'done', data: { id: `stub-${Date.now()}`, tokensOut: 1, msTotal: 15 } },
 			]),
 		});

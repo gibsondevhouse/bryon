@@ -6,8 +6,7 @@ Local AI chat client built with SvelteKit. Bryon runs on one machine and talks t
 
 ```sh
 ollama serve
-ollama pull gemma3:4b          # default chat model
-ollama pull gemma4:e4b         # vision model for photo uploads
+ollama pull gemma4:e4b         # Bryon v1 is locked to Gemma 4
 ```
 
 ## Local Development

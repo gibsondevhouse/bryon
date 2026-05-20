@@ -1,12 +1,19 @@
+import { randomUUID } from 'node:crypto';
 import type { RequestHandler } from './$types';
 import { loadConfig } from '$lib/server/config';
 import { OllamaAdapter } from '$lib/server/llm/ollama';
+import { getOllamaSupervisor } from '$lib/server/llm/supervisor';
 import { isVisionCapable } from '$lib/server/llm/vision';
 import { countTokens } from '$lib/server/llm/tokens';
 import { getLogger } from '$lib/server/logger';
 import { apiError, parseJsonBody } from '$lib/server/http';
 import { ChatService } from '$lib/server/features/chat/chat';
 import { PersonaService } from '$lib/server/features/personas/persona';
+import {
+	MemoryEntryService,
+	ProjectService,
+	projectFileToAttachment,
+} from '$lib/server/features/projects/project';
 import { PromptBuilder } from '$lib/server/features/streaming/prompt';
 import {
 	buildSystemPrompt,
@@ -33,7 +40,38 @@ export const POST: RequestHandler = async ({ params, request }) => {
 	if (!parsed.ok) return parsed.response;
 
 	const { config } = loadConfig();
-	const attachments = parsed.data.attachments ?? [];
+	await getOllamaSupervisor().probe(true);
+
+	const chatService = new ChatService();
+	const personaService = new PersonaService();
+	const projectService = new ProjectService();
+	const memoryEntryService = new MemoryEntryService();
+	const chat = chatService.get(params.id);
+	if (!chat) return apiError(404, 'CHAT_NOT_FOUND', 'Chat not found.');
+
+	const requestedProjectFileIds = [...new Set(parsed.data.projectFileIds ?? [])];
+	if (requestedProjectFileIds.length > 0 && !chat.projectId) {
+		return apiError(
+			400,
+			STREAM_ERROR_CODE.BadRequest,
+			'Project files can only be attached from a project chat.',
+		);
+	}
+	const projectFiles = requestedProjectFileIds.length
+		? projectService.getFilesByIds(requestedProjectFileIds, chat.projectId)
+		: [];
+	if (projectFiles.length !== requestedProjectFileIds.length) {
+		return apiError(
+			400,
+			STREAM_ERROR_CODE.BadRequest,
+			'One or more selected project files are unavailable.',
+		);
+	}
+
+	const attachments = [
+		...(parsed.data.attachments ?? []),
+		...projectFiles.map(projectFileToAttachment),
+	];
 	const hasImageAttachment = attachments.some((item) => item.kind === 'image');
 	// Client-sent thinkingMode takes priority over the config default.
 	const effectiveThinkingMode =
@@ -41,8 +79,6 @@ export const POST: RequestHandler = async ({ params, request }) => {
 	const thinking = resolveThinking(effectiveThinkingMode, parsed.data.content);
 	const thinkingInstruction = thinkingDepthInstruction(effectiveThinkingMode);
 
-	const chatService = new ChatService();
-	const personaService = new PersonaService();
 	const ctx = loadStreamContext(
 		chatService,
 		personaService,
@@ -51,6 +87,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 	);
 	if ('response' in ctx) return ctx.response;
 	const { persona, model, llmParams } = ctx;
+	const project = ctx.chat.projectId ? projectService.get(ctx.chat.projectId) : null;
 
 	if (hasImageAttachment && !isVisionCapable(model)) {
 		return apiError(
@@ -103,7 +140,8 @@ export const POST: RequestHandler = async ({ params, request }) => {
 	const prompt = await promptBuilder.build({
 		personaSystemPrompt: buildSystemPrompt({
 			basePrompt: persona.systemPrompt,
-			memory: config.memory,
+			projectPromptOverride: project?.promptOverride,
+			memory: memoryEntryService.promptMemory(config.memory, project),
 			webContext,
 			thinkingInstruction,
 		}),
@@ -125,7 +163,9 @@ export const POST: RequestHandler = async ({ params, request }) => {
 		async start(controller) {
 			const emit = makeEmitter(controller);
 			const startedAt = performance.now();
+			const assistantId = randomUUID();
 			let assistantContent = '';
+			let tokensIn: number | null = null;
 			let tokensOut: number | null = null;
 			let msToFirst: number | null = null;
 
@@ -138,9 +178,11 @@ export const POST: RequestHandler = async ({ params, request }) => {
 					signal: abortController.signal,
 					emit,
 					startedAt,
+					assistantId,
 					thinking,
 				});
 				assistantContent = result.assistantContent;
+				tokensIn = result.tokensIn;
 				tokensOut = result.tokensOut;
 				msToFirst = result.msToFirst;
 
@@ -148,8 +190,10 @@ export const POST: RequestHandler = async ({ params, request }) => {
 				const assistantMessage = finalizeAssistant({
 					chatService,
 					chatId: params.id,
+					assistantId,
 					prompt,
 					assistantContent,
+					tokensIn,
 					tokensOut,
 					msToFirst,
 					msTotal,
@@ -202,8 +246,10 @@ export const POST: RequestHandler = async ({ params, request }) => {
 					finalizeInterrupted({
 						chatService,
 						chatId: params.id,
+						assistantId,
 						prompt,
 						assistantContent,
+						tokensIn,
 						tokensOut,
 						msToFirst,
 					});

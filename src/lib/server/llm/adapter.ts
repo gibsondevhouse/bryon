@@ -27,6 +27,7 @@ export type LLMThinkingEvent = {
 
 export type LLMDoneEvent = {
 	type: 'done';
+	tokensIn?: number;
 	tokensOut?: number;
 	totalDurationMs?: number;
 };

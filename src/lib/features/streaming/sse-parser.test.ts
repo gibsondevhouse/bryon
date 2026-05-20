@@ -35,13 +35,13 @@ describe('sse-parser', () => {
 
 	it('reassembles a data payload split across chunks', () => {
 		const parser = createSseParser();
-		const a = parser.feed('event: meta\ndata: {"msToFirst":');
+		const a = parser.feed('event: meta\ndata: {"assistantId":"a1","msToFirst":');
 		const b = parser.feed('100,"tokensIn":50}\n\n');
 		expect(a).toEqual([]);
 		expect(b).toEqual([
 			{
 				event: STREAM_EVENT.Meta,
-				data: { msToFirst: 100, tokensIn: 50 },
+				data: { assistantId: 'a1', msToFirst: 100, tokensIn: 50 },
 			},
 		]);
 	});

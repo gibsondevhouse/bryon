@@ -18,6 +18,23 @@ let {
 } = $props();
 
 let copied = $state(false);
+let activeIndex = $state(-1);
+let containerEl: HTMLDivElement | undefined = $state();
+
+function handleKeydown(e: KeyboardEvent) {
+	const buttons = containerEl?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)');
+	if (!buttons || buttons.length === 0) return;
+
+	if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+		e.preventDefault();
+		activeIndex = (activeIndex + 1) % buttons.length;
+		buttons[activeIndex].focus();
+	} else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+		e.preventDefault();
+		activeIndex = (activeIndex - 1 + buttons.length) % buttons.length;
+		buttons[activeIndex].focus();
+	}
+}
 
 async function copyContent(): Promise<void> {
 	try {
@@ -32,27 +49,46 @@ async function copyContent(): Promise<void> {
 }
 </script>
 
-<div class="actions">
+<div class="actions" bind:this={containerEl} onkeydown={handleKeydown} role="toolbar" tabindex="-1" aria-label="Message actions">
 	<IconActionButton
 		onclick={copyContent}
 		title={copied ? 'Copied' : 'Copy'}
 		label={copied ? 'Copied to clipboard' : 'Copy message'}
+		tabindex={activeIndex === -1 || activeIndex === 0 ? 0 : -1}
 	>
 		{#if copied}<Check size={15} />{:else}<Copy size={15} />{/if}
 	</IconActionButton>
 	{#if onRetry}
-		<IconActionButton onclick={onRetry} title="Regenerate" label="Regenerate response">
+		<IconActionButton
+			onclick={onRetry}
+			title="Regenerate"
+			label="Regenerate response"
+			tabindex={activeIndex === 1 ? 0 : -1}
+		>
 			<RotateCcw size={15} />
 		</IconActionButton>
 	{/if}
-	<IconActionButton title="Good response" label="Mark as good response">
+	<IconActionButton
+		title="Good response"
+		label="Mark as good response"
+		tabindex={activeIndex === (onRetry ? 2 : 1) ? 0 : -1}
+	>
 		<ThumbsUp size={15} />
 	</IconActionButton>
-	<IconActionButton title="Bad response" label="Mark as bad response">
+	<IconActionButton
+		title="Bad response"
+		label="Mark as bad response"
+		tabindex={activeIndex === (onRetry ? 3 : 2) ? 0 : -1}
+	>
 		<ThumbsDown size={15} />
 	</IconActionButton>
 	{#if onOpenActivity}
-		<IconActionButton onclick={onOpenActivity} title="Activity" label="Open activity panel">
+		<IconActionButton
+			onclick={onOpenActivity}
+			title="Activity"
+			label="Open activity panel"
+			tabindex={activeIndex === (onRetry ? 4 : 3) ? 0 : -1}
+		>
 			<Sparkles size={15} />
 		</IconActionButton>
 	{/if}

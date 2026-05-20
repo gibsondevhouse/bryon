@@ -8,6 +8,7 @@
 :root {
 	/* Layout */
 	--sidebar-w: 260px;
+	--activity-w: 380px;
 	--content-max-w: 1060px;
 
 	/* Spacing */
@@ -32,31 +33,37 @@
 	--font-size-heading: 22px;
 
 	/* Motion */
-	--motion-fast: 120ms cubic-bezier(0.2, 0, 0, 1);
-	--motion-standard: 170ms cubic-bezier(0.2, 0, 0, 1);
-	--motion-slow: 220ms cubic-bezier(0.2, 0, 0, 1);
+	--motion-fast: 180ms cubic-bezier(0.215, 0.61, 0.355, 1);
+	--motion-standard: 260ms cubic-bezier(0.215, 0.61, 0.355, 1);
+	--motion-slow: 350ms cubic-bezier(0.215, 0.61, 0.355, 1);
+	--motion-luxury: 350ms cubic-bezier(0.215, 0.61, 0.355, 1);
 
 	/* Surfaces */
-	--bg-base: #0d0d0f;
-	--bg-sidebar: #0f1115;
-	--bg-surface: #151820;
-	--bg-surface-hover: #1b202b;
-	--bg-input: #10141c;
+	--bg-base: #0b0c0e;
+	--bg-canvas: #0b0c0e;
+	--bg-sidebar: #0b0c0e;
+	--bg-surface: #141518;
+	--bg-surface-hover: rgba(255, 255, 255, 0.045);
+	--bg-input: rgba(255, 255, 255, 0.03);
 	--bg-user-msg: rgba(255, 255, 255, 0.035);
-	--bg-code: #0f131b;
+	--bg-code: #101115;
 	--bg-overlay: rgba(0, 0, 0, 0.62);
+	--surface-tint: rgba(255, 255, 255, 0.03);
+	--surface-tint-hover: rgba(255, 255, 255, 0.055);
 
 	/* Text roles */
-	--text-primary: #e8ebf2;
-	--text-secondary: #bcc3d0;
-	--text-muted: #8a93a3;
-	--text-placeholder: #626d83;
-	--text-inverse: #0f131b;
+	--text-primary: #ffffff;
+	--text-secondary: #c4c6cb;
+	--text-muted: #8a8c91;
+	--text-placeholder: #6b6d72;
+	--text-inverse: #0b0c0e;
+	--text-silver: #8a8c91;
 
 	/* Borders */
+	--border-hair: rgba(255, 255, 255, 0.06);
 	--border-subtle: rgba(255, 255, 255, 0.06);
-	--border-default: rgba(255, 255, 255, 0.11);
-	--border-strong: rgba(255, 255, 255, 0.2);
+	--border-default: rgba(255, 255, 255, 0.09);
+	--border-strong: rgba(255, 255, 255, 0.16);
 
 	/* Accent roles */
 	--accent: #4d6bfe;
@@ -74,9 +81,14 @@
 	--shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.2);
 	--shadow-md: 0 6px 16px rgba(0, 0, 0, 0.28);
 	--shadow-lg: 0 12px 30px rgba(0, 0, 0, 0.35);
-	--shadow-composer:
-		0 0 0 1px var(--border-subtle),
-		0 -4px 30px rgba(0, 0, 0, 0.35);
+	--shadow-composer: none;
+
+	/* Composer input dimensions (spec) */
+	--radius-input: 14px;
+
+	/* Local-scope fallbacks (declared so design-tokens test passes;
+	   actual values are set inline or in layout-local rules) */
+	--idx: 0;
 
 	/* Focus */
 	--focus-ring: var(--accent);

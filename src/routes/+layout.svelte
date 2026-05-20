@@ -1,6 +1,6 @@
 <script lang="ts">
 import '../app.css';
-import { onMount } from 'svelte';
+import { onMount, untrack } from 'svelte';
 import favicon from '$lib/assets/favicon.svg';
 import { page } from '$app/state';
 import { PanelLeft } from '@lucide/svelte';
@@ -10,6 +10,7 @@ import ShortcutsModal from '$lib/features/chat/ShortcutsModal.svelte';
 import ChatSwitcher from '$lib/features/chat/ChatSwitcher.svelte';
 import SearchPanel from '$lib/features/chat/SearchPanel.svelte';
 import ActivityPanel from '$lib/features/chat/ActivityPanel.svelte';
+import ToastContainer from '$lib/components/ToastContainer.svelte';
 import { session } from '$lib/features/streaming/session.svelte';
 
 let { data, children } = $props();
@@ -27,10 +28,13 @@ let hasViewportSynced = $state(false);
 const currentChatId = $derived(page.params?.id ?? null);
 
 $effect(() => {
-	session.hydrate({
-		chats: data.chats,
-		settings: data.settings,
-		ollamaReachable: healthReachable,
+	untrack(() => {
+		session.hydrate({
+			chats: data.chats,
+			projects: data.projects,
+			settings: data.settings,
+			ollamaReachable: healthReachable,
+		});
 	});
 });
 
@@ -101,8 +105,11 @@ async function probeHealth(showRetryError: boolean): Promise<void> {
 			return;
 		}
 
-		const body = (await response.json()) as { ollama?: boolean };
-		healthReachable = body.ollama ?? false;
+		const body = (await response.json()) as {
+			ollama?: boolean;
+			ollamaState?: 'unknown' | 'ready' | 'unreachable';
+		};
+		healthReachable = body.ollama ?? body.ollamaState === 'ready';
 		session.ollamaReachable = healthReachable;
 		if (showRetryError && !healthReachable) {
 			healthRetryError = 'Still unreachable. Make sure `ollama serve` is running.';
@@ -202,6 +209,7 @@ function onGlobalKey(e: KeyboardEvent): void {
 <ShortcutsModal bind:open={shortcutsOpen} />
 <ChatSwitcher bind:open={switcherOpen} chats={data.chats} />
 <SearchPanel bind:open={searchOpen} />
+<ToastContainer />
 
 <style>
 /* ── Shell ── */
@@ -230,14 +238,13 @@ function onGlobalKey(e: KeyboardEvent): void {
 /* ── Activity rail ── */
 .activity-rail {
 	overflow: hidden;
-	background: var(--bg-sidebar);
+	background: var(--bg-base);
 }
 
 /* ── Sidebar rail ── */
 .sidebar-rail {
 	overflow: hidden;
-	background: var(--bg-sidebar);
-	border-right: 1px solid var(--border-subtle);
+	background: var(--bg-base);
 }
 
 /* ── Main ── */

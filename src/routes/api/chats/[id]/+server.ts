@@ -12,6 +12,7 @@ const updateChatSchema = z.object({
 	model: z.string().trim().min(1).nullable().optional(),
 	archived: z.boolean().optional(),
 	params: llmParamsSchema.partial().nullable().optional(),
+	projectId: z.string().trim().min(1).nullable().optional(),
 });
 
 export const GET: RequestHandler = async ({ params }) => {

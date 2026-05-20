@@ -1,18 +1,27 @@
 <script lang="ts">
 import MessageList from './MessageList.svelte';
 import Composer from './Composer.svelte';
+import ProjectContextPanel from './ProjectContextPanel.svelte';
 import StatusBar from './StatusBar.svelte';
 import { session } from '$lib/features/streaming/session.svelte';
+import type { Attachment, Project, ProjectFile } from '$lib/shared/types';
 
 let {
 	chatId,
+	project = null,
+	projectFiles = [],
 }: {
 	chatId: string;
+	project?: Project | null;
+	projectFiles?: ProjectFile[];
 } = $props();
 
 let commandFeedback = $state<string | null>(null);
 let composerWithMessages: Composer | undefined = $state();
 let composerEmpty: Composer | undefined = $state();
+let emptyWebSearch = $state(session.draftWebSearch);
+let emptyMode = $derived<'chat' | 'web'>(emptyWebSearch ? 'web' : 'chat');
+let selectedProjectFileIds = $state<string[]>([]);
 
 const hasMessages = $derived(
 	session.messages.some((m) => m.role !== 'system') || session.streaming,
@@ -33,9 +42,12 @@ const contextTokens = $derived(session.metrics?.tokensIn ?? 0);
 
 function handleSend(
 	content: string,
-	options?: { attachments?: import('$lib/shared/types').Attachment[]; webSearch?: boolean },
+	options?: { attachments?: Attachment[]; projectFileIds?: string[]; webSearch?: boolean },
 ): void {
-	void session.send(chatId, content, options);
+	const projectFileIds = selectedProjectFileIds;
+	void session.send(chatId, content, { ...options, projectFileIds }).then(() => {
+		selectedProjectFileIds = [];
+	});
 }
 
 function handleCancel(): void {
@@ -74,6 +86,14 @@ $effect(() => {
 			onRetry={handleRetry}
 		/>
 
+		{#if project}
+			<ProjectContextPanel
+				{project}
+				initialFiles={projectFiles}
+				bind:selectedFileIds={selectedProjectFileIds}
+			/>
+		{/if}
+
 		<Composer
 			bind:this={composerWithMessages}
 			{chatId}
@@ -98,11 +118,36 @@ $effect(() => {
 	<div class="chat-view">
 		<div class="empty-view">
 			<div class="empty-center">
-				<h1 class="empty-title">What can I help with?</h1>
+				<header class="empty-brand">
+					<h1>Bryon</h1>
+					<p class="empty-model">{activeModel}</p>
+				</header>
+
+				<div class="mode-track" role="tablist" aria-label="Mode" style:--idx={emptyMode === 'web' ? 1 : 0}>
+					<span class="mode-indicator" aria-hidden="true"></span>
+					<button
+						type="button"
+						role="tab"
+						aria-selected={emptyMode === 'chat'}
+						class="mode-tab"
+						class:active={emptyMode === 'chat'}
+						onclick={() => (emptyWebSearch = false)}
+					>Chat</button>
+					<button
+						type="button"
+						role="tab"
+						aria-selected={emptyMode === 'web'}
+						class="mode-tab"
+						class:active={emptyMode === 'web'}
+						onclick={() => (emptyWebSearch = true)}
+					>Web</button>
+				</div>
+
 				<Composer
 					bind:this={composerEmpty}
 					{chatId}
 					bind:draft={session.draft}
+					bind:webSearch={emptyWebSearch}
 					streaming={false}
 					disabled={!session.ollamaReachable}
 					bind:commandFeedback
@@ -110,6 +155,14 @@ $effect(() => {
 					onCancel={handleCancel}
 					onSlashCommand={handleSlashCommand}
 				/>
+
+				{#if project}
+					<ProjectContextPanel
+						{project}
+						initialFiles={projectFiles}
+						bind:selectedFileIds={selectedProjectFileIds}
+					/>
+				{/if}
 			</div>
 		</div>
 
@@ -141,17 +194,86 @@ $effect(() => {
 }
 
 .empty-center {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: var(--sp-5);
 	width: 100%;
 	max-width: 720px;
 	padding: 0 var(--sp-6);
 }
 
-.empty-title {
-	margin: 0 0 var(--sp-8);
+.empty-brand {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: var(--sp-1);
 	text-align: center;
-	font-size: 30px;
-	font-weight: 700;
-	letter-spacing: -0.03em;
-	color: var(--text-primary);
+}
+
+.empty-brand h1 {
+	margin: 0;
+	font-size: clamp(34px, 5vw, 44px);
+	font-weight: 600;
+	letter-spacing: -0.02em;
+	color: #ffffff;
+	line-height: 1;
+}
+
+.empty-model {
+	margin: 0;
+	font-size: 12.5px;
+	color: var(--text-muted);
+	letter-spacing: 0.01em;
+}
+
+/* ── Mode track ── */
+.mode-track {
+	position: relative;
+	display: inline-flex;
+	padding: 4px;
+	background: var(--surface-tint);
+	border: 1px solid var(--border-hair);
+	border-radius: 999px;
+	isolation: isolate;
+}
+
+.mode-indicator {
+	position: absolute;
+	top: 4px;
+	bottom: 4px;
+	left: 4px;
+	width: calc(50% - 4px);
+	border-radius: 999px;
+	background: rgba(255, 255, 255, 0.08);
+	transform: translateX(calc(var(--idx, 0) * 100%));
+	transition: transform var(--motion-luxury);
+	z-index: 0;
+}
+
+.mode-tab {
+	position: relative;
+	z-index: 1;
+	min-width: 88px;
+	padding: 7px 18px;
+	border: 0;
+	background: transparent;
+	color: var(--text-muted);
+	font: inherit;
+	font-size: 13px;
+	font-weight: 500;
+	letter-spacing: 0.01em;
+	cursor: pointer;
+	border-radius: 999px;
+	transition: color var(--motion-luxury);
+}
+
+.mode-tab.active {
+	color: #ffffff;
+}
+
+.mode-tab:focus-visible {
+	outline: none;
+	box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.18);
 }
 </style>

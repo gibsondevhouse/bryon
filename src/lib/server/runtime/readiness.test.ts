@@ -25,6 +25,12 @@ describe('ensureSchemaCompatibility', () => {
 				created_at INTEGER NOT NULL,
 				summarized INTEGER NOT NULL DEFAULT 0
 			);
+			CREATE TABLE chats (
+				id TEXT PRIMARY KEY,
+				title TEXT NOT NULL,
+				created_at INTEGER NOT NULL,
+				updated_at INTEGER NOT NULL
+			);
 			CREATE TABLE personas (
 				id TEXT PRIMARY KEY,
 				name TEXT NOT NULL,
@@ -40,6 +46,7 @@ describe('ensureSchemaCompatibility', () => {
 		expect(first.checks).toEqual({
 			messagesAttachmentsJson: true,
 			personaColumns: true,
+			chatsProjectId: true,
 		});
 		expect(first.applied.length).toBeGreaterThan(0);
 
@@ -49,6 +56,7 @@ describe('ensureSchemaCompatibility', () => {
 		expect(second.checks).toEqual({
 			messagesAttachmentsJson: true,
 			personaColumns: true,
+			chatsProjectId: true,
 		});
 
 		db.close();

@@ -42,8 +42,15 @@ export const thinkingTokenEventSchema = z.object({
 });
 
 export const metaEventSchema = z.object({
+	assistantId: z.string().min(1),
 	msToFirst: z.number().int().nonnegative(),
 	tokensIn: z.number().int().nonnegative(),
+	/** Effective context window (num_ctx) for this turn, in tokens. */
+	contextLimit: z.number().int().positive().optional(),
+	/** Prompt-tokens budget after the 75% soft cap. */
+	tokenBudget: z.number().int().positive().optional(),
+	/** Whether the soft cap was reached and history was trimmed/summarized. */
+	softCapReached: z.boolean().optional(),
 });
 
 export const doneEventSchema = z.object({
@@ -84,6 +91,23 @@ export type StreamEvent =
 	| { event: typeof STREAM_EVENT.Done; data: DoneEvent }
 	| { event: typeof STREAM_EVENT.Error; data: StreamErrorEvent }
 	| { event: typeof STREAM_EVENT.Articles; data: ArticlesEvent };
+
+export type SessionEvent =
+	| { type: 'START'; userMessageId: string }
+	| { type: 'OPEN' }
+	| {
+			type: 'META';
+			assistantId: string;
+			tokensIn: number;
+			msToFirst: number;
+	  }
+	| { type: 'TOKEN'; delta: string }
+	| { type: 'THINKING_TOKEN'; delta: string }
+	| { type: 'THINKING_END' }
+	| { type: 'ARTICLES'; items: NewsArticle[] }
+	| { type: 'DONE'; assistantId: string; tokensOut: number; msTotal: number }
+	| { type: 'ERROR'; code: StreamErrorCode; message?: string }
+	| { type: 'ABORT' };
 
 /** Map of event name → schema, for typed lookups on both sides. */
 export const streamEventSchemas = {

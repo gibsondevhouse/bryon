@@ -78,6 +78,9 @@ export class TitleService {
 					num_predict: 32,
 				},
 				signal: input.signal,
+				// Titles never need chain-of-thought; skip it so we don't
+				// waste tokens or evict the chat model from VRAM.
+				thinking: false,
 			});
 
 			const title = sanitizeTitle(await collectStreamText(stream));

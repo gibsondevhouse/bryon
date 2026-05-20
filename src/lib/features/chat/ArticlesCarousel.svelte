@@ -88,6 +88,7 @@ function domain(url: string): string {
 	color: var(--text-primary);
 	line-height: 1.4;
 	display: -webkit-box;
+	line-clamp: 2;
 	-webkit-line-clamp: 2;
 	-webkit-box-orient: vertical;
 	overflow: hidden;
@@ -98,6 +99,7 @@ function domain(url: string): string {
 	color: var(--text-secondary);
 	line-height: 1.5;
 	display: -webkit-box;
+	line-clamp: 2;
 	-webkit-line-clamp: 2;
 	-webkit-box-orient: vertical;
 	overflow: hidden;

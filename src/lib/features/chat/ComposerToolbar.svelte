@@ -44,7 +44,7 @@ let {
 	gap: 5px;
 	height: 28px;
 	padding: 0 var(--sp-3);
-	border: 1px solid var(--border-default);
+	border: 0;
 	border-radius: var(--radius-full);
 	background: transparent;
 	color: var(--text-muted);
@@ -52,24 +52,21 @@ let {
 	font-weight: 500;
 	cursor: pointer;
 	transition:
-		background var(--motion-fast),
-		color var(--motion-fast),
-		border-color var(--motion-fast);
+		background-color var(--motion-luxury),
+		color var(--motion-luxury);
 }
 
 .tool-btn:hover {
-	border-color: var(--border-strong);
 	color: var(--text-secondary);
-	background: var(--bg-surface);
+	background: rgba(255, 255, 255, 0.04);
 }
 
 .tool-btn.active {
-	border-color: var(--accent);
-	color: var(--accent-text);
-	background: var(--accent-soft);
+	color: #ffffff;
+	background: rgba(255, 255, 255, 0.08);
 }
 
 .tool-btn.active:hover {
-	background: var(--accent-soft);
+	background: rgba(255, 255, 255, 0.12);
 }
 </style>

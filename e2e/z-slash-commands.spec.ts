@@ -17,8 +17,8 @@ test.beforeEach(async ({ page }) => {
 			status: 200,
 			headers: { 'Content-Type': 'text/event-stream' },
 			body: sseChunks([
+				{ event: 'meta', data: { assistantId: 'stub-1', msToFirst: 5, tokensIn: 1 } },
 				{ event: 'token', data: { delta: 'Hi' } },
-				{ event: 'meta', data: { msToFirst: 5, tokensIn: 1 } },
 				{ event: 'done', data: { id: 'stub-1', tokensOut: 1, msTotal: 10 } },
 			]),
 		});

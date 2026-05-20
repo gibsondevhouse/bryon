@@ -9,6 +9,7 @@ export type SchemaCompatibilityReport = {
 	checks: {
 		messagesAttachmentsJson: boolean;
 		personaColumns: boolean;
+		chatsProjectId: boolean;
 	};
 };
 
@@ -92,6 +93,12 @@ export function ensureSchemaCompatibility(
 		'ALTER TABLE `personas` ADD `params_json` text;',
 		'personas.params_json',
 	);
+	ensureColumn(
+		'chats',
+		'project_id',
+		'ALTER TABLE `chats` ADD `project_id` text;',
+		'chats.project_id',
+	);
 
 	const checks = {
 		messagesAttachmentsJson: columnExists(sqlite, 'messages', 'attachments_json'),
@@ -99,6 +106,7 @@ export function ensureSchemaCompatibility(
 			columnExists(sqlite, 'personas', 'default_model') &&
 			columnExists(sqlite, 'personas', 'tools') &&
 			columnExists(sqlite, 'personas', 'params_json'),
+		chatsProjectId: columnExists(sqlite, 'chats', 'project_id'),
 	};
 
 	return { applied, warnings, checks };

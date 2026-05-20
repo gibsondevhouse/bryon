@@ -19,11 +19,12 @@ import {
 	tokenEventSchema,
 	type StreamEventName,
 } from '$lib/shared/stream-events';
-import type { LLMParams, MemorySettings, Message } from '$lib/shared/types';
+import type { Chat, LLMParams, MemorySettings, Message } from '$lib/shared/types';
 
 const encoder = new TextEncoder();
 
 export type StreamContext = {
+	chat: Chat;
 	persona: {
 		id: string;
 		systemPrompt: string;
@@ -72,6 +73,7 @@ export function loadStreamContext(
 	};
 
 	return {
+		chat,
 		persona: {
 			id: persona.id,
 			systemPrompt: persona.systemPrompt,
@@ -120,12 +122,14 @@ export type RunLLMStreamInput = {
 	signal: AbortSignal;
 	emit: EmitFn;
 	startedAt: number;
+	assistantId: string;
 	/** Whether to enable chain-of-thought reasoning. Defaults to true. */
 	thinking?: boolean;
 };
 
 export type RunLLMStreamResult = {
 	assistantContent: string;
+	tokensIn: number | null;
 	tokensOut: number | null;
 	msToFirst: number | null;
 };
@@ -133,8 +137,19 @@ export type RunLLMStreamResult = {
 export async function runLLMStream(
 	input: RunLLMStreamInput,
 ): Promise<RunLLMStreamResult> {
-	const { adapter, model, prompt, params, signal, emit, startedAt, thinking } = input;
+	const {
+		adapter,
+		model,
+		prompt,
+		params,
+		signal,
+		emit,
+		startedAt,
+		assistantId,
+		thinking,
+	} = input;
 	let assistantContent = '';
+	let tokensIn: number | null = null;
 	let tokensOut: number | null = null;
 	let msToFirst: number | null = null;
 
@@ -161,8 +176,12 @@ export async function runLLMStream(
 				if (msToFirst === null) {
 					msToFirst = Math.round(performance.now() - startedAt);
 					emit(STREAM_EVENT.Meta, {
+						assistantId,
 						msToFirst,
 						tokensIn: prompt.tokensIn,
+						contextLimit: prompt.contextLimit,
+						tokenBudget: prompt.tokenBudget,
+						softCapReached: prompt.strategy !== 'full',
 					});
 				}
 				assistantContent += value.delta;
@@ -170,20 +189,23 @@ export async function runLLMStream(
 				continue;
 			}
 
+			tokensIn = value.tokensIn ?? null;
 			tokensOut = value.tokensOut ?? countTokens(assistantContent);
 		}
 	} finally {
 		reader.releaseLock();
 	}
 
-	return { assistantContent, tokensOut, msToFirst };
+	return { assistantContent, tokensIn, tokensOut, msToFirst };
 }
 
 export type FinalizeAssistantInput = {
 	chatService: ChatService;
 	chatId: string;
+	assistantId: string;
 	prompt: PromptBuildResult;
 	assistantContent: string;
+	tokensIn: number | null;
 	tokensOut: number | null;
 	msToFirst: number | null;
 	msTotal: number;
@@ -191,10 +213,11 @@ export type FinalizeAssistantInput = {
 
 export function finalizeAssistant(input: FinalizeAssistantInput): Message {
 	return input.chatService.addMessage({
+		id: input.assistantId,
 		chatId: input.chatId,
 		role: 'assistant',
 		content: input.assistantContent,
-		tokensIn: input.prompt.tokensIn,
+		tokensIn: input.tokensIn ?? input.prompt.tokensIn,
 		tokensOut: input.tokensOut ?? countTokens(input.assistantContent),
 		msToFirst: input.msToFirst,
 		msTotal: input.msTotal,
@@ -205,10 +228,11 @@ export type FinalizeInterruptedInput = Omit<FinalizeAssistantInput, 'msTotal'>;
 
 export function finalizeInterrupted(input: FinalizeInterruptedInput): void {
 	input.chatService.addMessage({
+		id: input.assistantId,
 		chatId: input.chatId,
 		role: 'assistant',
 		content: input.assistantContent,
-		tokensIn: input.prompt.tokensIn,
+		tokensIn: input.tokensIn ?? input.prompt.tokensIn,
 		tokensOut: input.tokensOut ?? countTokens(input.assistantContent),
 		msToFirst: input.msToFirst,
 		msTotal: null,
@@ -267,6 +291,7 @@ export function persistPromptSummary(
 
 export function buildSystemPrompt(input: {
 	basePrompt: string;
+	projectPromptOverride?: string | null;
 	memory: MemorySettings;
 	webContext?: string | null;
 	thinkingInstruction?: string | null;
@@ -282,6 +307,10 @@ export function buildSystemPrompt(input: {
 		timeZoneName: 'short',
 	});
 	const sections = [`Current date and time: ${dateTimeStr}\n\n${input.basePrompt.trim()}`];
+
+	if (input.projectPromptOverride?.trim()) {
+		sections.push(`Project prompt override:\n${input.projectPromptOverride.trim()}`);
+	}
 
 	if (input.memory.enabled) {
 		const memorySections: string[] = [];

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, asc, desc, eq, inArray, lt } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, lt, sql } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import {
 	chatSchema,
@@ -23,6 +23,7 @@ let supportsAttachmentsColumn: boolean | null = null;
 export type ListChatsInput = {
 	archived?: boolean;
 	includeArchived?: boolean;
+	projectId?: string | null;
 	limit?: number;
 	offset?: number;
 };
@@ -33,6 +34,7 @@ export type CreateChatInput = {
 	model?: string;
 	personaId?: string;
 	params?: Partial<LLMParams> | null;
+	projectId?: string | null;
 };
 
 export type UpdateChatInput = Partial<
@@ -40,6 +42,7 @@ export type UpdateChatInput = Partial<
 > & {
 	model?: string | null;
 	archived?: boolean;
+	projectId?: string | null;
 };
 
 export type ListMessagesInput = {
@@ -62,28 +65,64 @@ export type CreateMessageInput = {
 };
 
 export class ChatService {
-	constructor(private readonly db: Db = getDb()) {}
+	private static listMessagesStmt: {
+		all(args: {
+			chatId: string;
+			beforeCreatedAt: number;
+			limit: number;
+		}): MessageRow[];
+	} | null = null;
+
+	constructor(private readonly db: Db = getDb()) {
+		this.initPreparedStatements();
+	}
+
+	private initPreparedStatements() {
+		if (ChatService.listMessagesStmt || !this.hasAttachmentsColumn()) return;
+		try {
+			ChatService.listMessagesStmt = this.db
+				.select()
+				.from(messages)
+				.where(
+					and(
+						eq(messages.chatId, sql.placeholder('chatId')),
+						lt(messages.createdAt, sql.placeholder('beforeCreatedAt')),
+					),
+				)
+				.orderBy(desc(messages.createdAt))
+				.limit(sql.placeholder('limit'))
+				.prepare();
+		} catch (error) {
+			console.warn('Failed to prepare listMessages statement:', error);
+		}
+	}
 
 	list(input: ListChatsInput = {}): Chat[] {
 		const limit = normalizeLimit(input.limit, 50, 200);
 		const offset = Math.max(0, input.offset ?? 0);
 
-		const rows = input.includeArchived
-			? this.db
-					.select()
-					.from(chats)
-					.orderBy(desc(chats.updatedAt), desc(chats.createdAt))
-					.limit(limit)
-					.offset(offset)
-					.all()
-			: this.db
-					.select()
-					.from(chats)
-					.where(eq(chats.archived, input.archived ? 1 : 0))
-					.orderBy(desc(chats.updatedAt), desc(chats.createdAt))
-					.limit(limit)
-					.offset(offset)
-					.all();
+		const filters = [];
+		if (!input.includeArchived) {
+			filters.push(eq(chats.archived, input.archived ? 1 : 0));
+		}
+		if (input.projectId !== undefined) {
+			filters.push(
+				input.projectId === null
+					? sql`${chats.projectId} IS NULL`
+					: eq(chats.projectId, input.projectId),
+			);
+		}
+
+		const query = this.db
+			.select()
+			.from(chats)
+			.orderBy(desc(chats.updatedAt), desc(chats.createdAt))
+			.limit(limit)
+			.offset(offset);
+		const rows =
+			filters.length > 0
+				? query.where(and(...filters)).all()
+				: query.all();
 
 		return rows.map(toChat);
 	}
@@ -109,6 +148,7 @@ export class ChatService {
 				updatedAt: now,
 				archived: 0,
 				paramsJson: serializeParams(input.params),
+				projectId: input.projectId ?? null,
 			})
 			.run();
 
@@ -142,6 +182,10 @@ export class ChatService {
 			values.archived = input.archived ? 1 : 0;
 			hasChanges = true;
 		}
+		if (input.projectId !== undefined) {
+			values.projectId = input.projectId;
+			hasChanges = true;
+		}
 		if (Object.hasOwn(input, 'params')) {
 			values.paramsJson = serializeParams(input.params);
 			hasChanges = true;
@@ -170,32 +214,31 @@ export class ChatService {
 
 	listMessages(chatId: string, input: ListMessagesInput = {}): Message[] {
 		const limit = normalizeLimit(input.limit, 100, 500);
-		if (!hasAttachmentsColumn()) {
+		if (!this.hasAttachmentsColumn()) {
 			return this.listMessagesCompat(chatId, input);
 		}
 
 		try {
-			const rows =
-				input.beforeCreatedAt === undefined
-					? this.db
-							.select()
-							.from(messages)
-							.where(eq(messages.chatId, chatId))
-							.orderBy(desc(messages.createdAt))
-							.limit(limit)
-							.all()
-					: this.db
-							.select()
-							.from(messages)
-							.where(
-								and(
-									eq(messages.chatId, chatId),
-									lt(messages.createdAt, input.beforeCreatedAt),
-								),
-							)
-							.orderBy(desc(messages.createdAt))
-							.limit(limit)
-							.all();
+			if (input.beforeCreatedAt === undefined) {
+				const rows = this.db
+					.select()
+					.from(messages)
+					.where(eq(messages.chatId, chatId))
+					.orderBy(desc(messages.createdAt))
+					.limit(limit)
+					.all();
+				return rows.reverse().map(toMessage);
+			}
+
+			if (!ChatService.listMessagesStmt) {
+				return this.listMessagesCompat(chatId, input);
+			}
+
+			const rows = ChatService.listMessagesStmt.all({
+				chatId,
+				beforeCreatedAt: input.beforeCreatedAt,
+				limit,
+			});
 
 			return rows.reverse().map(toMessage);
 		} catch (error) {
@@ -222,7 +265,7 @@ export class ChatService {
 				msTotal: input.msTotal ?? null,
 				createdAt,
 				summarized: input.summarized ? 1 : 0,
-				...(hasAttachmentsColumn()
+				...(this.hasAttachmentsColumn()
 					? { attachmentsJson: input.attachmentsJson ?? null }
 					: {}),
 			};
@@ -262,7 +305,7 @@ export class ChatService {
 	}
 
 	getMessage(id: string): Message | null {
-		if (!hasAttachmentsColumn()) {
+		if (!this.hasAttachmentsColumn()) {
 			return this.getMessageCompat(id);
 		}
 
@@ -367,6 +410,20 @@ export class ChatService {
 
 		return row ? toMessage(row) : null;
 	}
+
+	private hasAttachmentsColumn(): boolean {
+		if (supportsAttachmentsColumn !== null) return supportsAttachmentsColumn;
+		try {
+			const rows = getSqlite()
+				.prepare('PRAGMA table_info("messages")')
+				.all() as Array<{ name: string }>;
+			supportsAttachmentsColumn = rows.some((row) => row.name === 'attachments_json');
+			return supportsAttachmentsColumn;
+		} catch {
+			supportsAttachmentsColumn = false;
+			return false;
+		}
+	}
 }
 
 function toChat(row: ChatRow): Chat {
@@ -405,19 +462,6 @@ function normalizeLimit(
 	return Math.min(Math.max(1, value), maxValue);
 }
 
-function hasAttachmentsColumn(): boolean {
-	if (supportsAttachmentsColumn !== null) return supportsAttachmentsColumn;
-	try {
-		const rows = getSqlite()
-			.prepare('PRAGMA table_info("messages")')
-			.all() as Array<{ name: string }>;
-		supportsAttachmentsColumn = rows.some((row) => row.name === 'attachments_json');
-		return supportsAttachmentsColumn;
-	} catch {
-		supportsAttachmentsColumn = false;
-		return false;
-	}
-}
 
 function isMissingAttachmentsColumnError(error: unknown): boolean {
 	return (

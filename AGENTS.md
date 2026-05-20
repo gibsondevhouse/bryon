@@ -18,8 +18,7 @@ Ollama must be running before the app will work. v1 uses a chat model plus a vis
 
 ```sh
 ollama serve
-ollama pull gemma3:4b          # chat workhorse
-ollama pull gemma4:e4b         # vision model for photo uploads
+ollama pull gemma4:e4b         # Bryon v1 is locked to Gemma 4 (multimodal: chat + vision)
 ```
 
 ---
@@ -104,15 +103,15 @@ data_dir = "~/.local/share/bryon"
 [llm]
 backend      = "ollama"
 base_url     = "http://127.0.0.1:11434"
-model        = "gemma3:4b"
+model        = "gemma4:e4b"
 vision_model = "gemma4:e4b"
 
 [llm.params]
-temperature    = 0.6
-top_p          = 0.9
-top_k          = 40
+temperature    = 1.0
+top_p          = 0.95
+top_k          = 64
 repeat_penalty = 1.1
-num_ctx        = 8192
+num_ctx        = 16384
 num_predict    = 1024
 keep_alive     = "10m"
 
@@ -135,7 +134,7 @@ Read these before writing any code:
 
 | Doc | What it covers |
 | --- | --- |
-| `dev/docs/bryon-stack.md` | Full tech stack, file layout, DB schema, streaming design, API surface, boot sequence |
+| `dev/docs/stack/bryon-stack.md` | Full tech stack, file layout, DB schema, streaming design, API surface, boot sequence |
 | `dev/docs/bryon_deepseek_style_blueprint.md` | UI design system — layout, tokens, component specs |
 | `dev/docs/decisions.md` | 5 locked architectural decisions with rationale |
 | `dev/docs/slash-commands.md` | Slash command registry and implementation notes |
@@ -161,7 +160,7 @@ event: meta
 data: {"msToFirst":412,"tokensIn":287}
 
 event: error
-data: {"code":"MODEL_NOT_FOUND","model":"gemma3:4b","message":"..."}
+data: {"code":"MODEL_NOT_FOUND","model":"gemma4:e4b","message":"..."}
 
 event: done
 data: {"id":"01J...","tokensOut":58,"msTotal":1830}

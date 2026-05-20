@@ -1,42 +1,45 @@
 <script lang="ts">
 import { goto } from '$app/navigation';
-import { ArrowRight, MessageSquarePlus, Settings2 } from '@lucide/svelte';
-import { Button } from '$lib/ui/button';
+import { ArrowUp, Paperclip, Globe } from '@lucide/svelte';
 import { session } from '$lib/features/streaming/session.svelte';
 
 let { data } = $props();
 
-const recentChats = $derived(data.chats.slice(0, 8));
+const recentChats = $derived(data.chats.slice(0, 6));
 
-const suggestedPrompts: Array<{ title: string; prompt: string }> = [
-	{
-		title: 'Explain',
-		prompt: 'Explain SQLite WAL mode in plain language with one example.',
-	},
-	{
-		title: 'Draft',
-		prompt: 'Draft a concise release note for a desktop app update.',
-	},
-	{
-		title: 'Debug',
-		prompt: 'Give me a checklist for debugging a silent Node.js process exit.',
-	},
-	{
-		title: 'Plan',
-		prompt: 'Plan a one-week implementation roadmap for a local AI chat app.',
-	},
-];
+let mode = $state<'chat' | 'web'>('chat');
+let value = $state('');
+let textarea = $state<HTMLTextAreaElement | null>(null);
+
+const canSend = $derived(value.trim().length > 0);
 
 async function startNewChat(): Promise<void> {
+	session.draftWebSearch = mode === 'web';
 	const id = await session.createChat();
 	if (id) goto(`/chats/${id}`);
 }
 
-async function startFromPrompt(prompt: string): Promise<void> {
+async function submit(): Promise<void> {
+	const content = value.trim();
+	if (!content) return;
 	const id = await session.createChat();
 	if (!id) return;
-	session.draft = prompt;
+	session.draft = content;
+	session.draftWebSearch = mode === 'web';
 	goto(`/chats/${id}`);
+}
+
+function onKeydown(e: KeyboardEvent): void {
+	if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+		e.preventDefault();
+		void submit();
+	}
+}
+
+function autosize(): void {
+	if (!textarea) return;
+	textarea.style.height = 'auto';
+	textarea.style.height = `${Math.min(textarea.scrollHeight, 220)}px`;
 }
 
 function formatDate(value: number): string {
@@ -50,271 +53,402 @@ function formatDate(value: number): string {
 </script>
 
 <svelte:head>
-	<title>Bryon — Start</title>
+	<title>Bryon</title>
 </svelte:head>
 
-<div class="home-shell">
-	<section class="panel" data-testid="home-prompts-panel">
-		<div class="panel-header">
-			<div>
-				<p class="kicker">Start</p>
-				<h1>Open a conversation</h1>
-				<p class="lead">Everything stays local on this machine.</p>
-			</div>
+<div class="canvas">
+	<section class="hero">
+		<header class="brand">
+			<h1>Bryon</h1>
+			<p class="status">Local · {data.settings.llm.model}</p>
+		</header>
+
+		<div class="mode-track" role="tablist" aria-label="Mode" style:--idx={mode === 'web' ? 1 : 0}>
+			<span class="mode-indicator" aria-hidden="true"></span>
+			<button
+				type="button"
+				role="tab"
+				aria-selected={mode === 'chat'}
+				class="mode-tab"
+				class:active={mode === 'chat'}
+				onclick={() => (mode = 'chat')}
+			>
+				Chat
+			</button>
+			<button
+				type="button"
+				role="tab"
+				aria-selected={mode === 'web'}
+				class="mode-tab"
+				class:active={mode === 'web'}
+				onclick={() => (mode = 'web')}
+			>
+				Web
+			</button>
 		</div>
 
-		<div class="actions">
-			<Button size="lg" onclick={startNewChat} data-testid="start-new-chat">
-				<MessageSquarePlus size={16} />
-				<span>New chat</span>
-			</Button>
-			<Button href="/settings" size="lg" variant="outline">
-				<Settings2 size={16} />
-				<span>Settings</span>
-			</Button>
-		</div>
-	</section>
+		<form class="composer" onsubmit={(e) => { e.preventDefault(); void submit(); }}>
+			<textarea
+				bind:this={textarea}
+				bind:value
+				oninput={autosize}
+				onkeydown={onKeydown}
+				placeholder="Ask anything"
+				rows="1"
+				aria-label="Message"
+			></textarea>
 
-	<section class="panel" data-testid="home-runtime-panel">
-		<div class="panel-header">
-			<div>
-				<p class="kicker">Prompts</p>
-				<h2>Quick starts</h2>
-			</div>
-		</div>
-		<div class="prompt-grid">
-			{#each suggestedPrompts as item (item.title)}
+			<div class="composer-row">
+				<div class="sub-pills">
+					<button type="button" class="sub-pill" aria-label="Attach" disabled>
+						<Paperclip size={15} aria-hidden="true" />
+						<span>Attach</span>
+					</button>
+					<button
+						type="button"
+						class="sub-pill"
+						class:on={mode === 'web'}
+						aria-pressed={mode === 'web'}
+						onclick={() => (mode = mode === 'web' ? 'chat' : 'web')}
+					>
+						<Globe size={15} aria-hidden="true" />
+						<span>Web</span>
+					</button>
+				</div>
+
 				<button
-					type="button"
-					class="prompt-btn"
-					onclick={() => startFromPrompt(item.prompt)}
-					data-testid="suggested-prompt"
+					type="submit"
+					class="send"
+					aria-label="Send"
+					data-testid="start-new-chat"
+					onclick={(e) => {
+						if (!canSend) {
+							e.preventDefault();
+							void startNewChat();
+						}
+					}}
 				>
-					<strong>{item.title}</strong>
-					<span>{item.prompt}</span>
+					<ArrowUp size={16} aria-hidden="true" />
 				</button>
-			{/each}
-		</div>
+			</div>
+		</form>
 	</section>
 
-	<section class="panel" data-testid="home-recent-panel">
-		<div class="panel-header">
-			<div>
-				<p class="kicker">Runtime</p>
-				<h2>Environment</h2>
-			</div>
-		</div>
-		<div class="meta-grid">
-			<div class="meta-row">
-				<span>Model</span>
-				<code>{data.settings.llm.model}</code>
-			</div>
-			<div class="meta-row">
-				<span>Ollama URL</span>
-				<code>{data.settings.llm.base_url}</code>
-			</div>
-			<div class="meta-row">
-				<span>Data dir</span>
-				<code>{data.settings.app.data_dir}</code>
-			</div>
-		</div>
+	<section class="quiet" data-testid="home-runtime-panel">
+		<dl class="meta">
+			<div><dt>Model</dt><dd>{data.settings.llm.model}</dd></div>
+			<div><dt>Ollama</dt><dd>{data.settings.llm.base_url}</dd></div>
+			<div><dt>Data</dt><dd>{data.settings.app.data_dir}</dd></div>
+		</dl>
 	</section>
 
-	<section class="panel">
-		<div class="panel-header">
-			<div>
-				<p class="kicker">Chats</p>
-				<h2>{recentChats.length ? 'Recent conversations' : 'No conversations yet'}</h2>
-			</div>
-		</div>
-
-		{#if recentChats.length}
-			<div class="recent-list">
+	{#if recentChats.length}
+		<section class="quiet" data-testid="home-recent-panel">
+			<p class="quiet-label">Recent</p>
+			<ul class="recent">
 				{#each recentChats as chat (chat.id)}
-					<a href={`/chats/${chat.id}`} class="recent-row">
-						<div>
-							<strong>{chat.title}</strong>
-							<span>{chat.model ?? 'inherited'} · {formatDate(chat.updatedAt)}</span>
-						</div>
-						<ArrowRight size={16} aria-hidden="true" />
-					</a>
+					<li>
+						<a href={`/chats/${chat.id}`}>
+							<span class="recent-title">{chat.title}</span>
+							<span class="recent-time">{formatDate(chat.updatedAt)}</span>
+						</a>
+					</li>
 				{/each}
-			</div>
-		{:else}
-			<p class="empty">No saved chats yet.</p>
-		{/if}
-	</section>
+			</ul>
+		</section>
+	{:else}
+		<section class="quiet" data-testid="home-recent-panel" aria-hidden="true"></section>
+	{/if}
 </div>
 
 <style>
-.home-shell {
-	display: grid;
-	width: min(900px, 100%);
-	gap: var(--sp-4);
-}
-
-.panel {
-	border: 1px solid var(--border-default);
-	border-radius: var(--radius-lg);
-	background: var(--bg-surface);
-	padding: var(--sp-4);
-}
-
-.panel-header {
-	margin-bottom: var(--sp-3);
-}
-
-.kicker {
-	margin: 0;
-	font-size: 11px;
-	font-weight: 700;
-	color: var(--text-muted);
-	text-transform: uppercase;
-	letter-spacing: 0.07em;
-}
-
-h1,
-h2,
-p {
-	margin: 0;
-}
-
-h1 {
-	margin-top: 4px;
-	font-size: clamp(24px, 3vw, 30px);
-	line-height: 1.2;
-}
-
-h2 {
-	margin-top: 4px;
-	font-size: 18px;
-	line-height: 1.25;
-}
-
-.lead {
-	margin-top: var(--sp-2);
-	font-size: 14px;
-	color: var(--text-secondary);
-}
-
-.actions {
+.canvas {
 	display: flex;
-	flex-wrap: wrap;
-	gap: var(--sp-3);
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	min-height: 100%;
+	gap: var(--sp-8);
+	padding: var(--sp-6) var(--sp-4);
 }
 
-.prompt-grid {
-	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
+.hero {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: var(--sp-5);
+	width: min(640px, 100%);
+}
+
+.brand {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: var(--sp-1);
+	text-align: center;
+}
+
+.brand h1 {
+	margin: 0;
+	font-size: clamp(34px, 5vw, 44px);
+	font-weight: 600;
+	letter-spacing: -0.02em;
+	color: #ffffff;
+	line-height: 1;
+}
+
+.brand .status {
+	margin: 0;
+	font-size: 12.5px;
+	color: var(--text-muted);
+	letter-spacing: 0.01em;
+}
+
+/* ── Segmented pill ── */
+.mode-track {
+	position: relative;
+	display: inline-flex;
+	padding: 4px;
+	background: var(--surface-tint);
+	border: 1px solid var(--border-hair);
+	border-radius: 999px;
+	isolation: isolate;
+}
+
+.mode-indicator {
+	position: absolute;
+	top: 4px;
+	bottom: 4px;
+	left: 4px;
+	width: calc(50% - 4px);
+	border-radius: 999px;
+	background: rgba(255, 255, 255, 0.08);
+	transform: translateX(calc(var(--idx, 0) * 100%));
+	transition: transform var(--motion-luxury);
+	z-index: 0;
+}
+
+.mode-tab {
+	position: relative;
+	z-index: 1;
+	min-width: 88px;
+	padding: 7px 18px;
+	border: 0;
+	background: transparent;
+	color: var(--text-muted);
+	font: inherit;
+	font-size: 13px;
+	font-weight: 500;
+	letter-spacing: 0.01em;
+	cursor: pointer;
+	border-radius: 999px;
+	transition: color var(--motion-luxury);
+}
+
+.mode-tab.active {
+	color: #ffffff;
+}
+
+.mode-tab:focus-visible {
+	outline: none;
+	box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.18);
+}
+
+/* ── Composer ── */
+.composer {
+	width: 100%;
+	display: flex;
+	flex-direction: column;
+	gap: var(--sp-2);
+	padding: 12px 14px 10px;
+	background: var(--surface-tint);
+	border: 1px solid var(--border-hair);
+	border-radius: var(--radius-input);
+	transition:
+		border-color var(--motion-luxury),
+		background-color var(--motion-luxury);
+}
+
+.composer:focus-within {
+	border-color: rgba(255, 255, 255, 0.14);
+	background: rgba(255, 255, 255, 0.045);
+}
+
+.composer textarea {
+	width: 100%;
+	max-height: 220px;
+	min-height: 28px;
+	resize: none;
+	border: 0;
+	background: transparent;
+	color: #ffffff;
+	font: inherit;
+	font-size: 15px;
+	line-height: 1.5;
+	outline: none;
+	padding: 4px 2px;
+}
+
+.composer textarea::placeholder {
+	color: var(--text-placeholder);
+}
+
+.composer-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
 	gap: var(--sp-2);
 }
 
-.prompt-btn {
-	display: grid;
+.sub-pills {
+	display: inline-flex;
 	gap: 4px;
-	padding: var(--sp-3);
-	border: 1px solid var(--border-default);
-	border-radius: var(--radius-md);
+}
+
+.sub-pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 5px 10px;
+	border: 0;
 	background: transparent;
-	color: var(--text-primary);
-	text-align: left;
+	color: var(--text-muted);
+	font: inherit;
+	font-size: 12.5px;
+	border-radius: 999px;
 	cursor: pointer;
 	transition:
-		background var(--motion-fast),
-		border-color var(--motion-fast);
+		color var(--motion-luxury),
+		background-color var(--motion-luxury);
 }
 
-.prompt-btn strong {
-	font-size: 13px;
-}
-
-.prompt-btn span {
-	font-size: 12.5px;
-	line-height: 1.4;
+.sub-pill:hover:not(:disabled) {
+	background: rgba(255, 255, 255, 0.04);
 	color: var(--text-secondary);
 }
 
-.prompt-btn:hover {
-	background: var(--bg-surface-hover);
-	border-color: var(--border-strong);
+.sub-pill:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
 }
 
-.meta-grid {
-	display: grid;
-	gap: var(--sp-2);
+.sub-pill.on {
+	background: rgba(255, 255, 255, 0.06);
+	color: #ffffff;
 }
 
-.meta-row {
-	display: flex;
+.send {
+	display: inline-flex;
 	align-items: center;
-	justify-content: space-between;
-	gap: var(--sp-3);
-	font-size: 13px;
-	color: var(--text-secondary);
-}
-
-.meta-row code {
-	font-size: 12px;
-	border: 1px solid var(--border-subtle);
-	border-radius: 6px;
-	padding: 2px 6px;
-	color: var(--text-secondary);
-	background: var(--bg-input);
-	max-width: 70%;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.recent-list {
-	display: grid;
-	gap: var(--sp-2);
-}
-
-.recent-row {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: var(--sp-3);
-	padding: var(--sp-3);
-	border: 1px solid var(--border-subtle);
-	border-radius: var(--radius-md);
-	text-decoration: none;
-	color: var(--text-primary);
+	justify-content: center;
+	width: 30px;
+	height: 30px;
+	border: 0;
+	border-radius: 999px;
+	background: rgba(255, 255, 255, 0.08);
+	color: #ffffff;
+	cursor: pointer;
 	transition:
-		background var(--motion-fast),
-		border-color var(--motion-fast);
+		background-color var(--motion-luxury),
+		opacity var(--motion-luxury);
 }
 
-.recent-row:hover {
-	background: var(--bg-surface-hover);
-	border-color: var(--border-default);
+.send:hover:not(:disabled) {
+	background: rgba(255, 255, 255, 0.16);
 }
 
-.recent-row div {
+.send:disabled {
+	opacity: 0.45;
+	cursor: default;
+}
+
+/* ── Quiet meta + recents ── */
+.quiet {
+	width: min(640px, 100%);
+}
+
+.quiet-label {
+	margin: 0 0 var(--sp-2);
+	font-size: 11px;
+	font-weight: 500;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--text-muted);
+}
+
+.meta {
 	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: var(--sp-3);
+	margin: 0;
+}
+
+.meta div {
+	display: flex;
+	flex-direction: column;
 	gap: 2px;
 	min-width: 0;
 }
 
-.recent-row strong {
+.meta dt {
+	font-size: 11px;
+	font-weight: 500;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--text-muted);
+}
+
+.meta dd {
+	margin: 0;
+	font-size: 12.5px;
+	color: var(--text-secondary);
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
-.recent-row span {
-	font-size: 12px;
+.recent {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.recent li + li {
+	border-top: 1px solid var(--border-hair);
+}
+
+.recent a {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--sp-3);
+	padding: 10px 2px;
+	color: var(--text-secondary);
+	text-decoration: none;
+	transition: color var(--motion-luxury);
+}
+
+.recent a:hover {
+	color: #ffffff;
+}
+
+.recent-title {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 13.5px;
+}
+
+.recent-time {
+	flex: none;
+	font-size: 11.5px;
 	color: var(--text-muted);
 }
 
-.empty {
-	font-size: 13px;
-	color: var(--text-muted);
-}
-
-@media (max-width: 720px) {
-	.prompt-grid {
+@media (max-width: 560px) {
+	.meta {
 		grid-template-columns: 1fr;
 	}
 }

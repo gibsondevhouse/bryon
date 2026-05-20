@@ -17,6 +17,7 @@ const createChatSchema = z.object({
 	title: z.string().trim().min(1).optional(),
 	model: z.string().trim().min(1).optional(),
 	params: llmParamsSchema.partial().nullable().optional(),
+	projectId: z.string().trim().min(1).nullable().optional(),
 });
 
 export const GET: RequestHandler = async ({ url }) => {
@@ -25,10 +26,18 @@ export const GET: RequestHandler = async ({ url }) => {
 	const archived = parseBooleanParam(url.searchParams.get('archived'));
 	const includeArchived =
 		parseBooleanParam(url.searchParams.get('includeArchived')) ?? false;
+	const rawProjectId = url.searchParams.get('projectId');
+	const projectId =
+		rawProjectId === null
+			? undefined
+			: rawProjectId === 'global'
+				? null
+				: rawProjectId;
 
 	const chats = service.list({
 		archived,
 		includeArchived,
+		projectId,
 		limit: parsePositiveIntegerParam(url.searchParams.get('limit'), 50, 200),
 		offset: Math.max(
 			0,

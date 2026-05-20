@@ -17,6 +17,8 @@ import {
 	settingsSchema,
 } from '../shared/schemas';
 import type { Settings } from '../shared/types';
+import { isGemma4 } from './llm/vision';
+import { getLogger } from './logger';
 
 export type LoadedConfig = {
 	config: Settings;
@@ -56,7 +58,7 @@ export function loadConfig(
 			parseError = error instanceof Error ? error : new Error(String(error));
 		}
 	}
-	const config = applyEnvOverrides(baseConfig);
+	const config = enforceGemma4(applyEnvOverrides(baseConfig));
 
 	return {
 		config: {
@@ -230,4 +232,52 @@ function parseNumber(value: string | undefined): number | null {
 
 function tomlString(value: string): string {
 	return JSON.stringify(value);
+}
+
+/**
+ * Bryon v1 is locked to the Gemma 4 family. If config or env vars point at
+ * anything else, log a warning and substitute the default Gemma 4 tag so the
+ * app stays usable instead of failing closed at boot.
+ */
+function enforceGemma4(config: Settings): Settings {
+	const warnings: Array<{ field: string; value: string; replacement: string }> = [];
+
+	if (!isGemma4(config.llm.model)) {
+		warnings.push({
+			field: 'llm.model',
+			value: config.llm.model,
+			replacement: defaultLLMSettings.model,
+		});
+	}
+	const model = isGemma4(config.llm.model)
+		? config.llm.model
+		: defaultLLMSettings.model;
+
+	if (!isGemma4(config.llm.vision_model)) {
+		warnings.push({
+			field: 'llm.vision_model',
+			value: config.llm.vision_model,
+			replacement: defaultLLMSettings.vision_model,
+		});
+	}
+	const visionModel = isGemma4(config.llm.vision_model)
+		? config.llm.vision_model
+		: defaultLLMSettings.vision_model;
+
+	if (warnings.length > 0) {
+		for (const w of warnings) {
+			getLogger().warn(
+				{ field: w.field, value: w.value, replacement: w.replacement },
+				'config: non-Gemma-4 model rejected; using default',
+			);
+		}
+	}
+
+	if (model === config.llm.model && visionModel === config.llm.vision_model) {
+		return config;
+	}
+	return {
+		...config,
+		llm: { ...config.llm, model, vision_model: visionModel },
+	};
 }

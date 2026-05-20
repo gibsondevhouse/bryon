@@ -55,7 +55,7 @@ describe('Session.send — happy path', () => {
 		mockOkStream([
 			sseFrame('token', { delta: 'Hel' }),
 			sseFrame('token', { delta: 'lo' }),
-			sseFrame('meta', { msToFirst: 12, tokensIn: 5 }),
+			sseFrame('meta', { assistantId: 'asst-1', msToFirst: 12, tokensIn: 5 }),
 			sseFrame('done', { id: 'asst-1', tokensOut: 2, msTotal: 100 }),
 		]);
 
@@ -65,7 +65,7 @@ describe('Session.send — happy path', () => {
 				new Response(makeBody([
 					sseFrame('token', { delta: 'Hel' }),
 					sseFrame('token', { delta: 'lo' }),
-					sseFrame('meta', { msToFirst: 12, tokensIn: 5 }),
+					sseFrame('meta', { assistantId: 'asst-1', msToFirst: 12, tokensIn: 5 }),
 					sseFrame('done', { id: 'asst-1', tokensOut: 2, msTotal: 100 }),
 				]), {
 					status: 200,
