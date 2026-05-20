@@ -295,6 +295,16 @@ const grouped = $derived.by((): Group[] => {
 
 	<!-- Thread list -->
 	<div class="threads">
+		{#if session.chats.length === 0 && !session.currentChatId}
+			<div class="skeletons">
+				{#each Array(6) as _}
+					<div class="skeleton-row">
+						<div class="skeleton-line"></div>
+						<div class="skeleton-line short"></div>
+					</div>
+				{/each}
+			</div>
+		{/if}
 		{#each grouped as group (group.label)}
 			<div class="group-label">{group.label}</div>
 			{#each group.items as chat (chat.id)}
@@ -649,6 +659,36 @@ const grouped = $derived.by((): Group[] => {
 	color: var(--text-muted);
 	font-size: 13px;
 	text-align: center;
+}
+
+.skeletons {
+	display: flex;
+	flex-direction: column;
+	gap: var(--sp-2);
+	padding: var(--sp-2);
+}
+
+.skeleton-row {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: var(--sp-2);
+}
+
+.skeleton-line {
+	height: 12px;
+	background: var(--bg-surface-hover);
+	border-radius: 4px;
+	animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.skeleton-line.short {
+	width: 60%;
+}
+
+@keyframes pulse {
+	0%, 100% { opacity: 1; }
+	50% { opacity: .5; }
 }
 
 /* ── Footer ── */

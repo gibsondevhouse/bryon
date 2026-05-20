@@ -120,6 +120,7 @@ export type RunLLMStreamInput = {
 	signal: AbortSignal;
 	emit: EmitFn;
 	startedAt: number;
+	assistantId: string;
 	/** Whether to enable chain-of-thought reasoning. Defaults to true. */
 	thinking?: boolean;
 };
@@ -133,7 +134,17 @@ export type RunLLMStreamResult = {
 export async function runLLMStream(
 	input: RunLLMStreamInput,
 ): Promise<RunLLMStreamResult> {
-	const { adapter, model, prompt, params, signal, emit, startedAt, thinking } = input;
+	const {
+		adapter,
+		model,
+		prompt,
+		params,
+		signal,
+		emit,
+		startedAt,
+		assistantId,
+		thinking,
+	} = input;
 	let assistantContent = '';
 	let tokensOut: number | null = null;
 	let msToFirst: number | null = null;
@@ -161,6 +172,7 @@ export async function runLLMStream(
 				if (msToFirst === null) {
 					msToFirst = Math.round(performance.now() - startedAt);
 					emit(STREAM_EVENT.Meta, {
+						assistantId,
 						msToFirst,
 						tokensIn: prompt.tokensIn,
 					});
@@ -182,6 +194,7 @@ export async function runLLMStream(
 export type FinalizeAssistantInput = {
 	chatService: ChatService;
 	chatId: string;
+	assistantId: string;
 	prompt: PromptBuildResult;
 	assistantContent: string;
 	tokensOut: number | null;
@@ -191,6 +204,7 @@ export type FinalizeAssistantInput = {
 
 export function finalizeAssistant(input: FinalizeAssistantInput): Message {
 	return input.chatService.addMessage({
+		id: input.assistantId,
 		chatId: input.chatId,
 		role: 'assistant',
 		content: input.assistantContent,
@@ -205,6 +219,7 @@ export type FinalizeInterruptedInput = Omit<FinalizeAssistantInput, 'msTotal'>;
 
 export function finalizeInterrupted(input: FinalizeInterruptedInput): void {
 	input.chatService.addMessage({
+		id: input.assistantId,
 		chatId: input.chatId,
 		role: 'assistant',
 		content: input.assistantContent,

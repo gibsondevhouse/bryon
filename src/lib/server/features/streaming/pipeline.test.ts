@@ -50,6 +50,6 @@ describe('streaming pipeline', () => {
 		expect(prompt).toContain('User-managed memory');
 		expect(prompt).toContain('User prefers concise answers.');
 		expect(prompt).toContain('Do not suggest cloud sync.');
-		expect(prompt).toContain('Web lookup context');
+		expect(prompt).toContain('Web search context for this turn:');
 	});
 });

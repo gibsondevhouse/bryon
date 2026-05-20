@@ -17,14 +17,13 @@ export type TokenBatcherOptions = {
 };
 
 export function createTokenBatcher(options: TokenBatcherOptions): TokenBatcher {
-	const interval = options.flushIntervalMs ?? TOKEN_BATCH_FLUSH_MS;
 	let pending = '';
-	let timer: ReturnType<typeof setTimeout> | null = null;
+	let frame: number | null = null;
 
 	const flush = () => {
-		if (timer) {
-			clearTimeout(timer);
-			timer = null;
+		if (frame) {
+			cancelAnimationFrame(frame);
+			frame = null;
 		}
 		if (pending) {
 			const combined = pending;
@@ -37,15 +36,15 @@ export function createTokenBatcher(options: TokenBatcherOptions): TokenBatcher {
 		push(delta: string): void {
 			if (!delta) return;
 			pending += delta;
-			if (!timer) {
-				timer = setTimeout(flush, interval);
+			if (!frame && (typeof window !== 'undefined' || typeof requestAnimationFrame !== 'undefined')) {
+				frame = requestAnimationFrame(flush);
 			}
 		},
 		flush,
 		dispose(): void {
-			if (timer) {
-				clearTimeout(timer);
-				timer = null;
+			if (frame) {
+				cancelAnimationFrame(frame);
+				frame = null;
 			}
 			pending = '';
 		},
