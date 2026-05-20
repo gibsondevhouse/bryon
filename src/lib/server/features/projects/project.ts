@@ -46,6 +46,7 @@ export type UpdateProjectInput = Partial<
 	memoryEnabled?: boolean;
 	remember?: string;
 	neverSuggest?: string;
+	status?: 'ideation' | 'definition' | 'execution' | 'maintenance';
 	archived?: boolean;
 };
 
@@ -92,6 +93,7 @@ export class ProjectService {
 			memoryEnabled: 1,
 			remember: '',
 			neverSuggest: '',
+			status: 'ideation',
 			archivedAt: null,
 			createdAt: now,
 			updatedAt: now,
@@ -129,6 +131,10 @@ export class ProjectService {
 		}
 		if (input.neverSuggest !== undefined) {
 			values.neverSuggest = input.neverSuggest;
+			hasChanges = true;
+		}
+		if (input.status !== undefined) {
+			values.status = input.status;
 			hasChanges = true;
 		}
 		if (input.archived !== undefined) {

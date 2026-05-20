@@ -74,6 +74,9 @@ export const projects = sqliteTable(
 		memoryEnabled: integer('memory_enabled').notNull().default(1),
 		remember: text('remember').notNull().default(''),
 		neverSuggest: text('never_suggest').notNull().default(''),
+		status: text('status', {
+			enum: ['ideation', 'definition', 'execution', 'maintenance'],
+		}).notNull().default('ideation'),
 		archivedAt: integer('archived_at'),
 		createdAt: integer('created_at').notNull(),
 		updatedAt: integer('updated_at').notNull(),
@@ -274,3 +277,26 @@ export const kbChunksRelations = relations(kbChunks, ({ one }) => ({
 		references: [kbDocuments.id],
 	}),
 }));
+
+// ── Plans ─────────────────────────────────────────────────────────────────────
+
+export const plans = sqliteTable(
+	'plans',
+	{
+		id:        text('id').primaryKey(),
+		name:      text('name').notNull(),
+		summary:   text('summary'),
+		planType:  text('plan_type'),
+		startDate: text('start_date'),
+		status:    text('status', {
+			enum: ['ideation', 'definition', 'execution', 'maintenance'],
+		}).notNull().default('ideation'),
+		archivedAt: integer('archived_at'),
+		createdAt:  integer('created_at').notNull(),
+		updatedAt:  integer('updated_at').notNull(),
+	},
+	(t) => [
+		index('idx_plans_status_updated_at').on(t.status, t.updatedAt),
+		index('idx_plans_archived_at').on(t.archivedAt),
+	],
+);

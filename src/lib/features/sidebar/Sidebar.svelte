@@ -1,7 +1,7 @@
 <script lang="ts">
 import { goto, invalidateAll } from '$app/navigation';
 import { tick } from 'svelte';
-import { Plus, Settings, PanelLeftClose, MoreHorizontal, Pencil, Sparkles, Archive, Trash2, ChevronDown, Folder, FolderPlus, MoveRight } from '@lucide/svelte';
+import { Plus, Settings, PanelLeftClose, MoreHorizontal, Pencil, Sparkles, Archive, Trash2, ChevronDown, Folder, MoveRight } from '@lucide/svelte';
 import { session, type ThinkingMode } from '$lib/features/streaming/session.svelte';
 import {
 	DropdownMenu,
@@ -13,7 +13,7 @@ import {
 	DropdownMenuSubTrigger,
 	DropdownMenuTrigger,
 } from '$lib/ui/dropdown-menu';
-import type { Chat, Project, Settings as AppSettings } from '$lib/shared/types';
+import type { Chat, Plan, Project, Settings as AppSettings } from '$lib/shared/types';
 
 let {
 	settings,
@@ -73,7 +73,11 @@ const activeThinkingLabel = $derived(
 
 const visibleChats = $derived(session.chats.filter((c) => !c.archived));
 const visibleProjects = $derived(session.projects.filter((project) => !project.archivedAt));
+const visiblePlans = $derived(session.plans.filter((p) => !p.archivedAt));
 const globalChats = $derived(visibleChats.filter((chat) => !chat.projectId));
+
+let projectsOpen = $state(true);
+let planningOpen = $state(true);
 
 let renamingFor = $state<string | null>(null);
 let renameDraft = $state('');
@@ -358,12 +362,31 @@ function projectChats(projectId: string): Chat[] {
 
 	<!-- Thread list -->
 	<div class="threads">
+		<!-- Planning section -->
 		<div class="section-head">
-			<span>Projects</span>
-			<button type="button" onclick={createProject} title="Create project" aria-label="Create project">
-				<FolderPlus size={13} />
+			<a class="section-link" href="/planning">Planning</a>
+			<button class="section-chevron-btn" onclick={() => (planningOpen = !planningOpen)} aria-label={planningOpen ? 'Collapse planning' : 'Expand planning'}>
+				<ChevronDown size={12} class={!planningOpen ? 'section-chevron-collapsed' : ''} />
 			</button>
 		</div>
+		{#if planningOpen}
+			{#each visiblePlans as plan (plan.id)}
+				<a class="plan-row" href="/planning" title={plan.name}>
+					<span class="plan-row-name">{plan.name}</span>
+				</a>
+			{:else}
+				<div class="empty-hint">No plans yet</div>
+			{/each}
+		{/if}
+
+		<!-- Projects section (requires a plan first) -->
+		<div class="section-head">
+			<a class="section-link" href="/projects">Projects</a>
+			<button class="section-chevron-btn" onclick={() => (projectsOpen = !projectsOpen)} aria-label={projectsOpen ? 'Collapse projects' : 'Expand projects'}>
+				<ChevronDown size={12} class={!projectsOpen ? 'section-chevron-collapsed' : ''} />
+			</button>
+		</div>
+		{#if projectsOpen}
 		{#each visibleProjects as project (project.id)}
 			<div class="project-row">
 				{#if renamingProjectFor === project.id}
@@ -478,6 +501,7 @@ function projectChats(projectId: string): Chat[] {
 				</div>
 			{/each}
 		{/each}
+		{/if}
 
 		<div class="section-head global-head">
 			<span>Global chats</span>
@@ -787,6 +811,50 @@ function projectChats(projectId: string): Chat[] {
 	color: var(--text-primary);
 }
 
+.section-link {
+	flex: 1;
+	min-width: 0;
+	color: var(--text-muted);
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	text-decoration: none;
+	padding: 2px 0;
+	transition: color var(--motion-fast);
+}
+
+.section-link:hover {
+	color: var(--text-secondary);
+}
+
+.section-chevron-btn {
+	flex-shrink: 0;
+	display: grid;
+	place-items: center;
+	width: 24px;
+	height: 24px;
+	border: none;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--text-muted);
+	cursor: pointer;
+	transition: color var(--motion-fast), background var(--motion-fast);
+}
+
+.section-chevron-btn:hover {
+	background: var(--bg-surface-hover);
+	color: var(--text-primary);
+}
+
+.section-chevron-btn :global(svg) {
+	transition: transform var(--motion-fast);
+}
+
+.section-chevron-btn :global(svg.section-chevron-collapsed) {
+	transform: rotate(-90deg);
+}
+
 .global-head {
 	margin-top: var(--sp-2);
 }
@@ -963,6 +1031,32 @@ function projectChats(projectId: string): Chat[] {
 	color: var(--text-muted);
 	font-size: 13px;
 	text-align: center;
+}
+
+/* ── Plan rows ── */
+.plan-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 5px var(--sp-3);
+	border-radius: var(--radius-sm);
+	color: var(--text-secondary);
+	text-decoration: none;
+	font-size: 13px;
+	transition: background var(--motion-fast), color var(--motion-fast);
+	min-width: 0;
+}
+
+.plan-row:hover {
+	background: var(--bg-surface-hover);
+	color: var(--text-primary);
+}
+
+.plan-row-name {
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .skeletons {

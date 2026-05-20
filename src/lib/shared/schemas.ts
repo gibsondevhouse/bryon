@@ -127,6 +127,25 @@ export const messageSchema = z.object({
 	attachmentsJson: z.string().nullable().default(null),
 });
 
+export const planStatusSchema = z.enum([
+	'ideation',
+	'definition',
+	'execution',
+	'maintenance',
+]);
+
+export const planSchema = z.object({
+	id: z.string().min(1),
+	name: z.string().min(1),
+	summary: z.string().nullable().default(null),
+	planType: z.string().nullable().default(null),
+	startDate: z.string().nullable().default(null),
+	status: planStatusSchema,
+	archivedAt: z.number().int().nonnegative().nullable().default(null),
+	createdAt: z.number().int().nonnegative(),
+	updatedAt: z.number().int().nonnegative(),
+});
+
 export const projectSchema = z.object({
 	id: z.string().min(1),
 	name: z.string().min(1),
@@ -135,6 +154,7 @@ export const projectSchema = z.object({
 	memoryEnabled: z.boolean().default(true),
 	remember: z.string().default(''),
 	neverSuggest: z.string().default(''),
+	status: planStatusSchema.default('ideation'),
 	archivedAt: z.number().int().nonnegative().nullable().default(null),
 	createdAt: z.number().int().nonnegative(),
 	updatedAt: z.number().int().nonnegative(),

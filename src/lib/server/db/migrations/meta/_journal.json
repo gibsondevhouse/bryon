@@ -57,6 +57,13 @@
       "when": 1779247000000,
       "tag": "0007_v15_projects",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1779287504721,
+      "tag": "0008_cloudy_black_bolt",
+      "breakpoints": true
     }
   ]
 }

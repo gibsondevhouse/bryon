@@ -26,12 +26,16 @@ let healthRetryError = $state<string | null>(null);
 let hasViewportSynced = $state(false);
 
 const currentChatId = $derived(page.params?.id ?? null);
+const isFullBleed   = $derived(
+	page.url.pathname === '/planning' || page.url.pathname === '/projects'
+);
 
 $effect(() => {
 	untrack(() => {
 		session.hydrate({
 			chats: data.chats,
 			projects: data.projects,
+			plans: data.plans,
 			settings: data.settings,
 			ollamaReachable: healthReachable,
 		});
@@ -196,7 +200,7 @@ function onGlobalKey(e: KeyboardEvent): void {
 			</div>
 		{/if}
 
-		<div class="content" class:is-chat={!!currentChatId}>
+		<div class="content" class:is-chat={!!currentChatId} class:full-bleed={isFullBleed}>
 			{@render children()}
 		</div>
 	</main>
@@ -269,6 +273,11 @@ function onGlobalKey(e: KeyboardEvent): void {
 	min-height: 0;
 	overflow: auto;
 	padding: var(--sp-6);
+}
+
+.content.full-bleed {
+	padding: 0;
+	overflow: hidden;
 }
 
 .content.is-chat {
