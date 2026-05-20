@@ -24,7 +24,12 @@ export type StreamHandlers = {
 	/** Fires for every thinking_token event. */
 	onThinkingToken(data: ThinkingTokenEvent): void;
 	/** Fires for the single `meta` event. */
-	onMeta(data: { assistantId: string; msToFirst: number; tokensIn: number }): void;
+	onMeta(data: {
+		assistantId: string;
+		requestId: string;
+		msToFirst: number;
+		tokensIn: number;
+	}): void;
 	/** Fires when the batcher releases buffered token text. */
 	onAppend(combined: string): void;
 	/** Fires for `done`. The batcher has been flushed before this. */
@@ -79,7 +84,12 @@ export async function consumeSseStream(
 			}
 			case STREAM_EVENT.Meta: {
 				if (!isCurrentChat) break;
-				handlers.onMeta(event.data);
+			handlers.onMeta({
+				assistantId: event.data.assistantId,
+				msToFirst: event.data.msToFirst,
+				tokensIn: event.data.tokensIn,
+				requestId: event.data.requestId,
+			});
 				break;
 			}
 			case STREAM_EVENT.Done: {

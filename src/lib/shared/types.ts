@@ -36,7 +36,9 @@ export type StreamErrorCode =
 	| 'OLLAMA_ERROR'
 	| 'WEB_SEARCH_DISABLED'
 	| 'WEB_SEARCH_FAILED'
-	| 'ABORTED';
+	| 'ABORTED'
+	| 'BAD_REQUEST'
+	| 'BAD_EVENT';
 
 export type StreamPhase =
 	| { kind: 'idle' }

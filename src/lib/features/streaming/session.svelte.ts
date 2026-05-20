@@ -221,7 +221,7 @@ export class Session {
 			if (!response.ok || !response.body) {
 				const errorData = await response.json().catch(() => null);
 				const code =
-					(errorData?.error?.code as StreamErrorCode) ??
+					(errorData?.error?.code as any) ??
 					STREAM_ERROR_CODE.StreamInterrupted;
 				const message: string =
 					errorData?.error?.message ?? `HTTP ${response.status}`;
@@ -391,6 +391,7 @@ export class Session {
 				this.transition({
 					type: 'META',
 					assistantId: data.assistantId,
+					requestId: data.requestId,
 					tokensIn: data.tokensIn,
 					msToFirst: data.msToFirst,
 				});

@@ -19,8 +19,9 @@ let proseEl: HTMLDivElement | undefined = $state();
 const renderer = new marked.Renderer();
 const originalCode = renderer.code.bind(renderer);
 
-renderer.code = function({ text, lang, escaped }: { text: string; lang?: string; escaped?: boolean }) {
-    if (!lang) return originalCode({ text, lang, escaped });
+renderer.code = function(code: { text: string; lang?: string; escaped?: boolean }) {
+    const { text, lang, escaped } = code;
+    if (!lang) return originalCode(code as any);
 
     // Check global Shiki cache
     const cached = getCachedHighlight(lang, text);
@@ -45,7 +46,7 @@ renderer.code = function({ text, lang, escaped }: { text: string; lang?: string;
     }
 
     // Not streaming, will be enhanced by enhanceCodeBlocks effect
-    return originalCode({ text, lang, escaped });
+    return originalCode(code as any);
 };
 
 const renderedHtml = $derived.by(() => {

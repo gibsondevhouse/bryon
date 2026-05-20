@@ -82,7 +82,7 @@ export class ChatService {
 				)
 				.orderBy(desc(messages.createdAt))
 				.limit(sql.placeholder('limit'))
-				.prepare('listMessages');
+				.prepare();
 		} catch (error) {
 			console.warn('Failed to prepare listMessages statement:', error);
 		}

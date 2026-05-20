@@ -3,6 +3,7 @@ import { tick } from 'svelte';
 import { untrack } from 'svelte';
 import { createVirtualizer } from '@tanstack/svelte-virtual';
 import Message from './Message.svelte';
+import { session } from '../streaming/session.svelte';
 import type { Message as MessageType } from '$lib/shared/types';
 import type { NewsArticle } from '$lib/shared/stream-events';
 

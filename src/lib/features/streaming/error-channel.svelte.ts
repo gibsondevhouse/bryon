@@ -1,4 +1,4 @@
-import { STREAM_ERROR_CODE } from './shared/stream-events';
+import { STREAM_ERROR_CODE } from '$lib/shared/stream-events';
 
 export type AppError = {
     id: string;
