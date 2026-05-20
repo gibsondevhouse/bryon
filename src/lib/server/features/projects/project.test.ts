@@ -9,6 +9,7 @@ import { PersonaService } from '$lib/server/features/personas/persona';
 import {
 	MemoryEntryService,
 	ProjectService,
+	PromptPresetService,
 } from '$lib/server/features/projects/project';
 
 let tempDir = '';
@@ -74,7 +75,121 @@ describe('ProjectService', () => {
 	});
 });
 
+describe('PromptPresetService', () => {
+	it('creates, retrieves, updates, and deletes a preset', () => {
+		const service = new PromptPresetService(getDb());
+
+		const preset = service.create({ name: 'Concise', body: 'Be brief.' });
+		expect(preset.name).toBe('Concise');
+		expect(preset.body).toBe('Be brief.');
+
+		const fetched = service.get(preset.id);
+		expect(fetched?.id).toBe(preset.id);
+
+		const updated = service.update(preset.id, { name: 'Brief', body: 'Reply in one line.' });
+		expect(updated?.name).toBe('Brief');
+		expect(updated?.body).toBe('Reply in one line.');
+
+		expect(service.delete(preset.id)).toBe(true);
+		expect(service.get(preset.id)).toBeNull();
+		expect(service.delete(preset.id)).toBe(false);
+	});
+
+	it('lists presets in descending updatedAt order', () => {
+		const service = new PromptPresetService(getDb());
+
+		const a = service.create({ name: 'Alpha', body: 'A.' });
+		const b = service.create({ name: 'Beta', body: 'B.' });
+		service.update(a.id, { name: 'Alpha v2' });
+
+		const list = service.list();
+		const ids = list.map((p) => p.id);
+		expect(ids.indexOf(a.id)).toBeLessThan(ids.indexOf(b.id));
+	});
+
+	it('returns null for update/get on unknown id', () => {
+		const service = new PromptPresetService(getDb());
+		expect(service.get('no-such-id')).toBeNull();
+		expect(service.update('no-such-id', { name: 'Ghost' })).toBeNull();
+	});
+});
+
 describe('MemoryEntryService', () => {
+	it('creates entries with explicit scope and kind', () => {
+		const service = new MemoryEntryService(getDb());
+
+		const global = service.create({ scope: 'global', kind: 'remember', body: 'Always be helpful.' });
+		expect(global.scope).toBe('global');
+		expect(global.kind).toBe('remember');
+		expect(global.enabled).toBe(true);
+		expect(global.projectId).toBeNull();
+
+		const projectService = new ProjectService(getDb());
+		const project = projectService.create({ name: 'Test project' });
+		const proj = service.create({
+			scope: 'project',
+			projectId: project.id,
+			kind: 'never_suggest',
+			body: 'No pricing info.',
+		});
+		expect(proj.scope).toBe('project');
+		expect(proj.projectId).toBe(project.id);
+	});
+
+	it('lists entries filtered by scope and projectId', () => {
+		const service = new MemoryEntryService(getDb());
+		const projectService = new ProjectService(getDb());
+		const project = projectService.create({ name: 'Scoped proj' });
+
+		service.create({ scope: 'global', kind: 'remember', body: 'Global fact.' });
+		service.create({ scope: 'project', projectId: project.id, kind: 'remember', body: 'Proj fact.' });
+
+		const globals = service.list({ scope: 'global', projectId: null });
+		const projEntries = service.list({ scope: 'project', projectId: project.id });
+
+		expect(globals.every((e) => e.scope === 'global')).toBe(true);
+		expect(globals.some((e) => e.body === 'Global fact.')).toBe(true);
+		expect(projEntries.every((e) => e.scope === 'project')).toBe(true);
+		expect(projEntries.some((e) => e.body === 'Proj fact.')).toBe(true);
+	});
+
+	it('archives entries and excludes them from default list', () => {
+		const service = new MemoryEntryService(getDb());
+		const entry = service.create({ scope: 'global', kind: 'remember', body: 'Temp fact.' });
+
+		service.archive(entry.id);
+
+		const active = service.list({ includeArchived: false });
+		const all = service.list({ includeArchived: true });
+		expect(active.map((e) => e.id)).not.toContain(entry.id);
+		expect(all.map((e) => e.id)).toContain(entry.id);
+	});
+
+	it('toggles enabled state', () => {
+		const service = new MemoryEntryService(getDb());
+		const entry = service.create({ scope: 'global', kind: 'remember', body: 'Toggle me.' });
+
+		const disabled = service.update(entry.id, { enabled: false });
+		expect(disabled?.enabled).toBe(false);
+
+		const re = service.update(entry.id, { enabled: true });
+		expect(re?.enabled).toBe(true);
+	});
+
+	it('updates body and kind', () => {
+		const service = new MemoryEntryService(getDb());
+		const entry = service.create({ scope: 'global', kind: 'remember', body: 'Old body.' });
+
+		const updated = service.update(entry.id, { body: 'New body.', kind: 'never_suggest' });
+		expect(updated?.body).toBe('New body.');
+		expect(updated?.kind).toBe('never_suggest');
+	});
+
+	it('returns null for update on unknown id', () => {
+		const service = new MemoryEntryService(getDb());
+		expect(service.update('no-such-id', { body: 'Ghost' })).toBeNull();
+	});
+
 	it('imports legacy TOML memory and appends project memory in prompt order', () => {
 		const projectService = new ProjectService(getDb());
 		const memory = new MemoryEntryService(getDb());
