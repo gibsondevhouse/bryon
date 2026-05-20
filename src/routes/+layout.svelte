@@ -230,14 +230,13 @@ function onGlobalKey(e: KeyboardEvent): void {
 /* ── Activity rail ── */
 .activity-rail {
 	overflow: hidden;
-	background: var(--bg-sidebar);
+	background: var(--bg-base);
 }
 
 /* ── Sidebar rail ── */
 .sidebar-rail {
 	overflow: hidden;
-	background: var(--bg-sidebar);
-	border-right: 1px solid var(--border-subtle);
+	background: var(--bg-base);
 }
 
 /* ── Main ── */

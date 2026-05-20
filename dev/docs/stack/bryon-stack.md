@@ -110,21 +110,29 @@ Request body:
 }
 ```
 
-Response: `text/event-stream` with only these v1 events:
+Response: `text/event-stream` with these v1 events:
 
 ```text
 event: token
 data: {"delta":"Hel"}
 
+event: thinking_token
+data: {"delta":"Considering..."}
+
 event: meta
-data: {"msToFirst":412,"tokensIn":287}
+data: {"msToFirst":412,"tokensIn":287,"contextLimit":16384,"tokenBudget":12288,"softCapReached":false}
+
+event: articles
+data: {"messageId":"01J...","articles":[{"title":"...","url":"https://...","snippet":"..."}]}
 
 event: error
-data: {"code":"MODEL_NOT_FOUND","model":"gemma3:4b","message":"..."}
+data: {"code":"MODEL_NOT_FOUND","model":"gemma4:e4b","message":"..."}
 
 event: done
 data: {"id":"01J...","tokensOut":58,"msTotal":1830}
 ```
+
+`thinking_token` carries the reasoning channel (Gemma 4 `<|channel>thought…<channel|>` or `<think>…</think>`). It is rendered in the activity panel and is **not** stored in message content. `articles` is emitted immediately after `done` only when a web search ran for that turn. `meta`'s `contextLimit`/`tokenBudget`/`softCapReached` are optional — present when the server can compute them.
 
 No model-controlled `tool_call`, `tool_result`, or `tool_error` events are part of v1.
 
@@ -213,15 +221,15 @@ data_dir = "~/.local/share/bryon"
 [llm]
 backend      = "ollama"
 base_url     = "http://127.0.0.1:11434"
-model        = "gemma3:4b"
+model        = "gemma4:e4b"
 vision_model = "gemma4:e4b"
 
 [llm.params]
-temperature    = 0.6
-top_p          = 0.9
-top_k          = 40
+temperature    = 1.0
+top_p          = 0.95
+top_k          = 64
 repeat_penalty = 1.1
-num_ctx        = 8192
+num_ctx        = 16384
 num_predict    = 1024
 keep_alive     = "10m"
 

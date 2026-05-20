@@ -1,11 +1,11 @@
 import { z } from 'zod';
 
 export const defaultLLMParams = {
-	temperature: 0.6,
-	top_p: 0.9,
-	top_k: 40,
+	temperature: 1.0,
+	top_p: 0.95,
+	top_k: 64,
 	repeat_penalty: 1.1,
-	num_ctx: 8192,
+	num_ctx: 16384,
 	num_predict: 1024,
 	keep_alive: '10m',
 } as const;
@@ -19,7 +19,7 @@ export const defaultAppSettings = {
 export const defaultLLMSettings = {
 	backend: 'ollama',
 	base_url: 'http://127.0.0.1:11434',
-	model: 'gemma3:4b',
+	model: 'gemma4:e4b',
 	vision_model: 'gemma4:e4b',
 	thinking: 'normal' as 'off' | 'auto' | 'light' | 'normal' | 'extended',
 	params: defaultLLMParams,

@@ -10,6 +10,12 @@ import type { LLMAdapter, LLMMessage } from '../../llm/adapter';
 import { countMessageTokens, countTokens } from '../../llm/tokens';
 
 export const CONTEXT_SUMMARY_THRESHOLD = 0.75;
+/**
+ * Safety multiplier applied to heuristic token counts so that under-counting
+ * by the `len/4` estimator does not push the prompt past `num_ctx`.
+ * Gemma 4's tokenizer typically yields ~10–15% more tokens than the heuristic.
+ */
+export const TOKEN_SAFETY_MARGIN = 1.15;
 
 const SUMMARY_SYSTEM_PROMPT = `Summarize the earlier conversation for a future assistant turn.
 Keep durable user goals, decisions, constraints, and unresolved questions.
@@ -71,8 +77,9 @@ export class PromptBuilder {
 		const history = normalizeHistory(input.messages);
 		const fullMessages = [systemMessage, ...history.map(toHistoryLLMMessage)];
 		const fullTokens = countMessageTokens(fullMessages);
+		const safeTokens = Math.ceil(fullTokens * TOKEN_SAFETY_MARGIN);
 
-		if (fullTokens <= tokenBudget) {
+		if (safeTokens <= tokenBudget) {
 			return {
 				messages: fullMessages,
 				tokensIn: fullTokens,
@@ -230,7 +237,28 @@ function normalizeHistory(
 				message.role === 'user' ||
 				message.role === 'assistant',
 		)
+		.map((message) =>
+			message.role === 'assistant'
+				? { ...message, content: stripThinkingBlocks(message.content) }
+				: message,
+		)
 		.sort((left, right) => left.createdAt - right.createdAt);
+}
+
+/**
+ * Strip any chain-of-thought blocks from a prior assistant message before
+ * resending it to the model. Per `dev/docs/gemma-exploitation/thinking.md`,
+ * Gemma 4 must not see its own previous reasoning carried into the next turn.
+ *
+ * Handles both:
+ *  - Ollama/`think:true` fallback wrapping: `<think>…</think>`
+ *  - Native Gemma 4 channel tags: `<|channel>thought\n…<channel|>`
+ */
+export function stripThinkingBlocks(content: string): string {
+	return content
+		.replace(/<think>[\s\S]*?<\/think>/gi, '')
+		.replace(/<\|channel\|?>thought[\s\S]*?<channel\|?>/gi, '')
+		.replace(/^\s+/, '');
 }
 
 function partitionForSummary(

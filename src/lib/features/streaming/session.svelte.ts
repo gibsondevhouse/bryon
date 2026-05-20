@@ -24,6 +24,15 @@ export type SessionMetrics = {
 	msTotal: number;
 };
 
+export type ContextBudgetStatus = {
+	contextLimit: number;
+	tokenBudget: number;
+	tokensIn: number;
+	/** Fraction 0–1 of the budget consumed by the prompt this turn. */
+	usedPct: number;
+	softCapReached: boolean;
+};
+
 export type ThinkingMode = 'off' | 'auto' | 'light' | 'normal' | 'extended';
 
 export type SendOptions = {
@@ -52,6 +61,7 @@ export class Session {
 	activeActivityMessageId = $state<string | null>(null);
 	availableModels = $state<string[]>([]);
 	thinkingMode = $state<ThinkingMode>('normal');
+	contextBudget = $state<ContextBudgetStatus | null>(null);
 
 	private abortController: AbortController | null = null;
 	private tokensReceived = 0;
@@ -330,6 +340,15 @@ export class Session {
 					tokensOut: 0,
 					msTotal: 0,
 				};
+				if (data.contextLimit && data.tokenBudget) {
+					this.contextBudget = {
+						contextLimit: data.contextLimit,
+						tokenBudget: data.tokenBudget,
+						tokensIn: data.tokensIn,
+						usedPct: Math.min(1, data.tokensIn / data.tokenBudget),
+						softCapReached: data.softCapReached ?? false,
+					};
+				}
 			},
 			onDone: (data) => {
 				const tokensOut = data.tokensOut || this.tokensReceived;

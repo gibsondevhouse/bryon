@@ -42,6 +42,7 @@ type PendingAttachment = {
 let {
 	chatId,
 	draft = $bindable(''),
+	webSearch = $bindable(false),
 	streaming = false,
 	disabled = false,
 	commandFeedback = $bindable<string | null>(null),
@@ -51,6 +52,7 @@ let {
 }: {
 	chatId?: string;
 	draft?: string;
+	webSearch?: boolean;
 	streaming?: boolean;
 	disabled?: boolean;
 	commandFeedback?: string | null;
@@ -65,7 +67,6 @@ let pending = $state<PendingAttachment[]>([]);
 let uploading = $state(false);
 let uploadError = $state<string | null>(null);
 let dragOver = $state(false);
-let webSearch = $state(false);
 
 function handleKeydown(event: KeyboardEvent): void {
 	if (event.key === 'Escape' && streaming) {
@@ -417,15 +418,18 @@ export function focus(): void {
 	align-items: flex-end;
 	gap: var(--sp-2);
 	padding: var(--sp-3) var(--sp-3) var(--sp-3) var(--sp-4);
-	border-radius: var(--radius-xl);
-	background: var(--bg-surface);
-	border: 1px solid var(--border-subtle);
-	box-shadow: var(--shadow-composer);
-	transition: border-color 180ms ease;
+	border-radius: var(--radius-input);
+	background: var(--surface-tint);
+	border: 1px solid var(--border-hair);
+	box-shadow: none;
+	transition:
+		border-color var(--motion-luxury),
+		background-color var(--motion-luxury);
 }
 
 .pill:focus-within {
-	border-color: var(--border-default);
+	border-color: rgba(255, 255, 255, 0.14);
+	background: rgba(255, 255, 255, 0.045);
 }
 
 .input {

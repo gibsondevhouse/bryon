@@ -126,6 +126,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 			const emit = makeEmitter(controller);
 			const startedAt = performance.now();
 			let assistantContent = '';
+			let tokensIn: number | null = null;
 			let tokensOut: number | null = null;
 			let msToFirst: number | null = null;
 
@@ -141,6 +142,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 					thinking,
 				});
 				assistantContent = result.assistantContent;
+				tokensIn = result.tokensIn;
 				tokensOut = result.tokensOut;
 				msToFirst = result.msToFirst;
 
@@ -150,6 +152,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 					chatId: params.id,
 					prompt,
 					assistantContent,
+					tokensIn,
 					tokensOut,
 					msToFirst,
 					msTotal,
@@ -204,6 +207,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 						chatId: params.id,
 						prompt,
 						assistantContent,
+						tokensIn,
 						tokensOut,
 						msToFirst,
 					});

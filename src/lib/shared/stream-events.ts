@@ -44,6 +44,12 @@ export const thinkingTokenEventSchema = z.object({
 export const metaEventSchema = z.object({
 	msToFirst: z.number().int().nonnegative(),
 	tokensIn: z.number().int().nonnegative(),
+	/** Effective context window (num_ctx) for this turn, in tokens. */
+	contextLimit: z.number().int().positive().optional(),
+	/** Prompt-tokens budget after the 75% soft cap. */
+	tokenBudget: z.number().int().positive().optional(),
+	/** Whether the soft cap was reached and history was trimmed/summarized. */
+	softCapReached: z.boolean().optional(),
 });
 
 export const doneEventSchema = z.object({

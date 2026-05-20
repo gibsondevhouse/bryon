@@ -26,11 +26,11 @@ describe('messageRoleSchema', () => {
 describe('llmParamsSchema', () => {
 	it('fills all defaults when given an empty object', () => {
 		const parsed = llmParamsSchema.parse({});
-		expect(parsed.temperature).toBe(0.6);
-		expect(parsed.top_p).toBe(0.9);
-		expect(parsed.top_k).toBe(40);
+		expect(parsed.temperature).toBe(1.0);
+		expect(parsed.top_p).toBe(0.95);
+		expect(parsed.top_k).toBe(64);
 		expect(parsed.repeat_penalty).toBe(1.1);
-		expect(parsed.num_ctx).toBe(8192);
+		expect(parsed.num_ctx).toBe(16384);
 		expect(parsed.num_predict).toBe(1024);
 		expect(parsed.keep_alive).toBe('10m');
 	});
@@ -55,8 +55,8 @@ describe('settingsSchema', () => {
 		expect(parsed.app.host).toBe('127.0.0.1');
 		expect(parsed.app.port).toBe(5174);
 		expect(parsed.llm.backend).toBe('ollama');
-		expect(parsed.llm.model).toBe('gemma3:4b');
-		expect(parsed.llm.params.temperature).toBe(0.6);
+		expect(parsed.llm.model).toBe('gemma4:e4b');
+		expect(parsed.llm.params.temperature).toBe(1.0);
 	});
 
 	it('rejects llm.backend other than "ollama"', () => {

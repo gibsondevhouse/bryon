@@ -126,6 +126,7 @@ export type RunLLMStreamInput = {
 
 export type RunLLMStreamResult = {
 	assistantContent: string;
+	tokensIn: number | null;
 	tokensOut: number | null;
 	msToFirst: number | null;
 };
@@ -135,6 +136,7 @@ export async function runLLMStream(
 ): Promise<RunLLMStreamResult> {
 	const { adapter, model, prompt, params, signal, emit, startedAt, thinking } = input;
 	let assistantContent = '';
+	let tokensIn: number | null = null;
 	let tokensOut: number | null = null;
 	let msToFirst: number | null = null;
 
@@ -163,6 +165,9 @@ export async function runLLMStream(
 					emit(STREAM_EVENT.Meta, {
 						msToFirst,
 						tokensIn: prompt.tokensIn,
+						contextLimit: prompt.contextLimit,
+						tokenBudget: prompt.tokenBudget,
+						softCapReached: prompt.strategy !== 'full',
 					});
 				}
 				assistantContent += value.delta;
@@ -170,13 +175,14 @@ export async function runLLMStream(
 				continue;
 			}
 
+			tokensIn = value.tokensIn ?? null;
 			tokensOut = value.tokensOut ?? countTokens(assistantContent);
 		}
 	} finally {
 		reader.releaseLock();
 	}
 
-	return { assistantContent, tokensOut, msToFirst };
+	return { assistantContent, tokensIn, tokensOut, msToFirst };
 }
 
 export type FinalizeAssistantInput = {
@@ -184,6 +190,7 @@ export type FinalizeAssistantInput = {
 	chatId: string;
 	prompt: PromptBuildResult;
 	assistantContent: string;
+	tokensIn: number | null;
 	tokensOut: number | null;
 	msToFirst: number | null;
 	msTotal: number;
@@ -194,7 +201,7 @@ export function finalizeAssistant(input: FinalizeAssistantInput): Message {
 		chatId: input.chatId,
 		role: 'assistant',
 		content: input.assistantContent,
-		tokensIn: input.prompt.tokensIn,
+		tokensIn: input.tokensIn ?? input.prompt.tokensIn,
 		tokensOut: input.tokensOut ?? countTokens(input.assistantContent),
 		msToFirst: input.msToFirst,
 		msTotal: input.msTotal,
@@ -208,7 +215,7 @@ export function finalizeInterrupted(input: FinalizeInterruptedInput): void {
 		chatId: input.chatId,
 		role: 'assistant',
 		content: input.assistantContent,
-		tokensIn: input.prompt.tokensIn,
+		tokensIn: input.tokensIn ?? input.prompt.tokensIn,
 		tokensOut: input.tokensOut ?? countTokens(input.assistantContent),
 		msToFirst: input.msToFirst,
 		msTotal: null,

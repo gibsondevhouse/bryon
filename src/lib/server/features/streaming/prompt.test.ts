@@ -1,6 +1,26 @@
 import { describe, expect, it } from 'vitest';
 import type { LLMAdapter, LLMStreamEvent } from '../../llm/adapter';
-import { PromptBuilder, type PromptHistoryMessage } from './prompt';
+import { PromptBuilder, stripThinkingBlocks, type PromptHistoryMessage } from './prompt';
+
+describe('stripThinkingBlocks', () => {
+	it('removes <think>…</think> wrappers', () => {
+		expect(stripThinkingBlocks('<think>plan...</think>Hello.')).toBe('Hello.');
+	});
+
+	it('removes Gemma 4 channel-tagged thought blocks', () => {
+		const input = '<|channel|>thought\nreasoning here<channel|>The answer is 42.';
+		expect(stripThinkingBlocks(input)).toBe('The answer is 42.');
+	});
+
+	it('is a no-op when no thinking markers are present', () => {
+		expect(stripThinkingBlocks('Just a normal reply.')).toBe('Just a normal reply.');
+	});
+
+	it('handles multiple blocks', () => {
+		const input = '<think>a</think>X<think>b</think>Y';
+		expect(stripThinkingBlocks(input)).toBe('XY');
+	});
+});
 
 describe('PromptBuilder', () => {
 	it('keeps the full prompt when history fits under the context threshold', async () => {

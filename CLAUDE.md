@@ -18,7 +18,7 @@ Ollama must be running before the app will work:
 
 ```sh
 ollama serve
-ollama pull gemma3:4b
+ollama pull gemma4:e4b
 ```
 
 ---
@@ -99,14 +99,14 @@ data_dir = "~/.local/share/bryon"
 [llm]
 backend  = "ollama"
 base_url = "http://127.0.0.1:11434"
-model    = "gemma3:4b"
+model    = "gemma4:e4b"
 
 [llm.params]
-temperature    = 0.6
-top_p          = 0.9
-top_k          = 40
+temperature    = 1.0
+top_p          = 0.95
+top_k          = 64
 repeat_penalty = 1.1
-num_ctx        = 8192
+num_ctx        = 16384
 num_predict    = 1024
 keep_alive     = "10m"
 ```
@@ -144,7 +144,7 @@ event: meta
 data: {"msToFirst":412,"tokensIn":287}
 
 event: error
-data: {"code":"MODEL_NOT_FOUND","model":"gemma3:4b","message":"..."}
+data: {"code":"MODEL_NOT_FOUND","model":"gemma4:e4b","message":"..."}
 
 event: done
 data: {"id":"01J...","tokensOut":58,"msTotal":1830}

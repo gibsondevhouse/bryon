@@ -26,11 +26,13 @@ type OllamaChatChunk = {
 	};
 	done?: boolean;
 	eval_count?: number;
+	prompt_eval_count?: number;
 	total_duration?: number;
 	error?: string;
 };
 
 type DecodedRound = {
+	tokensIn?: number;
 	tokensOut?: number;
 	totalDurationMs?: number;
 };
@@ -123,6 +125,7 @@ export class OllamaAdapter implements LLMAdapter {
 
 					controller.enqueue({
 						type: 'done',
+						tokensIn: decoded.tokensIn,
 						tokensOut: decoded.tokensOut,
 						totalDurationMs: decoded.totalDurationMs,
 					});
@@ -211,6 +214,7 @@ async function decodeOllamaRound(input: {
 	input.setActiveReader(reader);
 	const decoder = new TextDecoder();
 	let buffer = '';
+	let tokensIn: number | undefined;
 	let tokensOut: number | undefined;
 	let totalDurationMs: number | undefined;
 	const tagRouter = createThinkTagRouter(input.onToken, input.onThinking);
@@ -231,6 +235,7 @@ async function decodeOllamaRound(input: {
 					tagRouter,
 					onThinking: input.onThinking,
 					onDone: (chunk) => {
+						tokensIn = chunk.prompt_eval_count ?? tokensIn;
 						tokensOut = chunk.eval_count;
 						totalDurationMs = chunk.total_duration
 							? Math.round(chunk.total_duration / NANOS_PER_MS)
@@ -248,6 +253,7 @@ async function decodeOllamaRound(input: {
 				tagRouter,
 				onThinking: input.onThinking,
 				onDone: (chunk) => {
+					tokensIn = chunk.prompt_eval_count ?? tokensIn;
 					tokensOut = chunk.eval_count;
 					totalDurationMs = chunk.total_duration
 						? Math.round(chunk.total_duration / NANOS_PER_MS)
@@ -280,6 +286,7 @@ async function decodeOllamaRound(input: {
 	}
 
 	return {
+		tokensIn,
 		tokensOut,
 		totalDurationMs,
 	};
