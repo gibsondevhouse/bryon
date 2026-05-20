@@ -240,26 +240,29 @@ function tomlString(value: string): string {
  * app stays usable instead of failing closed at boot.
  */
 function enforceGemma4(config: Settings): Settings {
-	const warnings: Array<{ field: string; value: string; replacement: string }> =
-		[];
+	const warnings: Array<{ field: string; value: string; replacement: string }> = [];
 
+	if (!isGemma4(config.llm.model)) {
+		warnings.push({
+			field: 'llm.model',
+			value: config.llm.model,
+			replacement: defaultLLMSettings.model,
+		});
+	}
 	const model = isGemma4(config.llm.model)
 		? config.llm.model
-		: (warnings.push({
-				field: 'llm.model',
-				value: config.llm.model,
-				replacement: defaultLLMSettings.model,
-			}),
-			defaultLLMSettings.model);
+		: defaultLLMSettings.model;
 
+	if (!isGemma4(config.llm.vision_model)) {
+		warnings.push({
+			field: 'llm.vision_model',
+			value: config.llm.vision_model,
+			replacement: defaultLLMSettings.vision_model,
+		});
+	}
 	const visionModel = isGemma4(config.llm.vision_model)
 		? config.llm.vision_model
-		: (warnings.push({
-				field: 'llm.vision_model',
-				value: config.llm.vision_model,
-				replacement: defaultLLMSettings.vision_model,
-			}),
-			defaultLLMSettings.vision_model);
+		: defaultLLMSettings.vision_model;
 
 	if (warnings.length > 0) {
 		for (const w of warnings) {

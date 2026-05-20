@@ -340,13 +340,23 @@ export class Session {
 					tokensOut: 0,
 					msTotal: 0,
 				};
-				if (data.contextLimit && data.tokenBudget) {
+				// contextLimit/tokenBudget/softCapReached are optional in metaEventSchema
+				const contextLimit = (data as Record<string, unknown>).contextLimit as
+					| number
+					| undefined;
+				const tokenBudget = (data as Record<string, unknown>).tokenBudget as
+					| number
+					| undefined;
+				const softCapReached = (data as Record<string, unknown>).softCapReached as
+					| boolean
+					| undefined;
+				if (contextLimit && tokenBudget) {
 					this.contextBudget = {
-						contextLimit: data.contextLimit,
-						tokenBudget: data.tokenBudget,
+						contextLimit,
+						tokenBudget,
 						tokensIn: data.tokensIn,
-						usedPct: Math.min(1, data.tokensIn / data.tokenBudget),
-						softCapReached: data.softCapReached ?? false,
+						usedPct: Math.min(1, data.tokensIn / tokenBudget),
+						softCapReached: softCapReached ?? false,
 					};
 				}
 			},
