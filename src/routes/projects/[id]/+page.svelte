@@ -2,9 +2,9 @@
 	import { goto } from '$app/navigation';
 	import {
 		ArrowLeft, Plus, Upload, Trash2, Brain, MessageSquare,
-		FileText, File, Image, ToggleLeft, ToggleRight, Loader,
+		FileText, File, Image, ToggleLeft, ToggleRight, Loader, MapIcon,
 	} from '@lucide/svelte';
-	import type { Chat, MemoryEntry, Project, ProjectFile } from '$lib/shared/types';
+	import type { Chat, MemoryEntry, Plan, Project, ProjectFile } from '$lib/shared/types';
 
 	let { data } = $props();
 
@@ -12,6 +12,7 @@
 	let chats    = $state<Chat[]>(data.chats);
 	let files    = $state<ProjectFile[]>(data.files);
 	let memory   = $state<MemoryEntry[]>(data.memory);
+	const plans  = data.plans as Plan[];
 
 	// ── Tabs ──────────────────────────────────────────────────────────────────
 	type Tab = 'chats' | 'files' | 'memory';
@@ -36,6 +37,22 @@
 			method: 'PATCH',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ name: next }),
+		});
+		if (res.ok) {
+			const body = await res.json() as { project: Project };
+			project = body.project;
+		}
+	}
+
+	// ── Status cycling ────────────────────────────────────────────────────────
+	const STATUS_ORDER: Project['status'][] = ['ideation', 'definition', 'execution', 'maintenance'];
+
+	async function cycleStatus(): Promise<void> {
+		const next = STATUS_ORDER[(STATUS_ORDER.indexOf(project.status) + 1) % STATUS_ORDER.length];
+		const res = await fetch(`/api/projects/${project.id}`, {
+			method: 'PATCH',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ status: next }),
 		});
 		if (res.ok) {
 			const body = await res.json() as { project: Project };
@@ -207,9 +224,14 @@
 		</nav>
 
 		<div class="header-right">
-			<span class="status-badge status-{project.status}">
+			<button
+				class="status-badge status-{project.status}"
+				type="button"
+				onclick={cycleStatus}
+				title="Click to advance status"
+			>
 				{STATUS_LABELS[project.status]}
-			</span>
+			</button>
 			<button class="danger-btn" type="button" onclick={archiveProject} title="Archive project">
 				<Trash2 size={13} />
 				<span>Archive</span>
@@ -219,6 +241,18 @@
 
 	{#if project.description}
 		<p class="project-desc">{project.description}</p>
+	{/if}
+
+	{#if plans.length > 0}
+		<div class="linked-plans">
+			<MapIcon size={12} class="linked-plans-icon" />
+			<span class="linked-plans-label">Plans</span>
+			{#each plans as plan (plan.id)}
+				<a class="plan-chip plan-chip-{plan.status}" href="/planning/{plan.id}">
+					{plan.name}
+				</a>
+			{/each}
+		</div>
 	{/if}
 
 	<!-- ── Tab bar ───────────────────────────────────────────────────────── -->
@@ -531,10 +565,19 @@
 	font-weight: 600;
 	letter-spacing: 0.06em;
 	text-transform: uppercase;
-	padding: 2px 8px;
+	padding: 3px 9px;
 	border-radius: 99px;
 	border: 1px solid var(--border-subtle);
+	background: transparent;
 	color: var(--text-placeholder);
+	cursor: pointer;
+	font-family: inherit;
+	transition: border-color var(--motion-fast), color var(--motion-fast);
+}
+
+.status-badge:hover {
+	border-color: var(--border-strong);
+	color: var(--text-secondary);
 }
 
 .status-badge.status-execution {
@@ -575,6 +618,59 @@
 	line-height: 1.55;
 	margin: 0;
 	margin-top: calc(-1 * var(--sp-2));
+}
+
+/* ── Linked plans ── */
+.linked-plans {
+	display: flex;
+	align-items: center;
+	gap: var(--sp-2);
+	flex-wrap: wrap;
+	margin-top: calc(-1 * var(--sp-2));
+}
+
+.linked-plans :global(.linked-plans-icon) {
+	color: var(--text-placeholder);
+	flex-shrink: 0;
+}
+
+.linked-plans-label {
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+	color: var(--text-placeholder);
+	margin-right: var(--sp-1);
+}
+
+.plan-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 2px 9px;
+	border: 1px solid var(--border-subtle);
+	border-radius: 99px;
+	font-size: 11.5px;
+	font-weight: 500;
+	color: var(--text-muted);
+	background: var(--bg-base);
+	text-decoration: none;
+	transition: border-color var(--motion-fast), color var(--motion-fast);
+}
+
+.plan-chip:hover {
+	border-color: var(--border-default);
+	color: var(--text-primary);
+}
+
+.plan-chip-execution {
+	border-color: rgba(77, 107, 254, 0.3);
+	color: var(--accent);
+}
+
+.plan-chip-maintenance {
+	border-color: rgba(52, 211, 153, 0.3);
+	color: var(--green, #34d399);
 }
 
 /* ── Tabs ── */

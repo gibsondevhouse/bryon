@@ -318,6 +318,7 @@ export const plans = sqliteTable(
 		status:    text('status', {
 			enum: ['ideation', 'definition', 'execution', 'maintenance'],
 		}).notNull().default('ideation'),
+		projectId:  text('project_id').references(() => projects.id, { onDelete: 'set null' }),
 		archivedAt: integer('archived_at'),
 		createdAt:  integer('created_at').notNull(),
 		updatedAt:  integer('updated_at').notNull(),
@@ -325,6 +326,7 @@ export const plans = sqliteTable(
 	(t) => [
 		index('idx_plans_status_updated_at').on(t.status, t.updatedAt),
 		index('idx_plans_archived_at').on(t.archivedAt),
+		index('idx_plans_project_id').on(t.projectId),
 	],
 );
 

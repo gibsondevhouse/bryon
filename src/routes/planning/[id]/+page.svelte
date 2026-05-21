@@ -1,13 +1,14 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { ArrowLeft, Plus, Trash2, Check, Archive } from '@lucide/svelte';
-	import type { Plan, PlanStatus, Task } from '$lib/shared/types';
+	import { ArrowLeft, Plus, Trash2, Check, Archive, Folder } from '@lucide/svelte';
+	import type { Plan, PlanStatus, Project, Task } from '$lib/shared/types';
 	import { session } from '$lib/features/streaming/session.svelte';
 
 	let { data } = $props();
 
-	let plan  = $state<Plan>(data.plan);
-	let tasks = $state<Task[]>(data.tasks);
+	let plan     = $state<Plan>(data.plan);
+	let tasks    = $state<Task[]>(data.tasks);
+	const projects = data.projects as Project[];
 
 	// ── Name editing ──────────────────────────────────────────────────────────
 	let editingName = $state(false);
@@ -37,15 +38,19 @@
 	}
 
 	// ── Meta editing ──────────────────────────────────────────────────────────
-	let editingMeta  = $state(false);
-	let summaryDraft = $state(plan.summary ?? '');
-	let typeDraft    = $state(plan.planType ?? '');
-	let dateDraft    = $state(plan.startDate ?? '');
+	let editingMeta   = $state(false);
+	let summaryDraft  = $state(plan.summary ?? '');
+	let typeDraft     = $state(plan.planType ?? '');
+	let dateDraft     = $state(plan.startDate ?? '');
+	let projectDraft  = $state(plan.projectId ?? '');
+
+	const linkedProject = $derived(projects.find((p) => p.id === plan.projectId) ?? null);
 
 	function openMeta(): void {
 		summaryDraft = plan.summary ?? '';
 		typeDraft    = plan.planType ?? '';
 		dateDraft    = plan.startDate ?? '';
+		projectDraft = plan.projectId ?? '';
 		editingMeta  = true;
 	}
 
@@ -58,6 +63,7 @@
 				summary:   summaryDraft.trim() || null,
 				planType:  typeDraft.trim() || null,
 				startDate: dateDraft || null,
+				projectId: projectDraft || null,
 			}),
 		});
 		if (res.ok) {
@@ -240,6 +246,15 @@
 						/>
 					</div>
 				</div>
+				<div class="meta-field">
+					<label class="meta-label" for="plan-project">Linked project</label>
+					<select id="plan-project" class="meta-input meta-select" bind:value={projectDraft}>
+						<option value="">None</option>
+						{#each projects as proj (proj.id)}
+							<option value={proj.id}>{proj.name}</option>
+						{/each}
+					</select>
+				</div>
 			</div>
 			<div class="meta-actions">
 				<button type="button" class="btn-ghost" onclick={() => (editingMeta = false)}>Cancel</button>
@@ -258,8 +273,14 @@
 				{#if plan.startDate}
 					<span class="meta-chip">{formatDate(plan.startDate)}</span>
 				{/if}
-				{#if !plan.summary && !plan.planType && !plan.startDate}
-					<span class="meta-hint">Add summary, type, or start date…</span>
+				{#if linkedProject}
+					<a class="meta-chip meta-project-link" href="/projects/{linkedProject.id}" onclick={(e) => e.stopPropagation()}>
+						<Folder size={10} />
+						{linkedProject.name}
+					</a>
+				{/if}
+				{#if !plan.summary && !plan.planType && !plan.startDate && !linkedProject}
+					<span class="meta-hint">Add summary, type, start date, or linked project…</span>
 				{/if}
 			</div>
 		</div>
@@ -496,6 +517,26 @@
 	border-radius: 99px;
 	background: var(--bg-base);
 }
+
+.meta-project-link {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	text-decoration: none;
+	transition: border-color var(--motion-fast), color var(--motion-fast);
+}
+
+.meta-project-link:hover {
+	border-color: var(--border-default);
+	color: var(--text-primary);
+}
+
+.meta-select {
+	appearance: none;
+	cursor: pointer;
+}
+
+.meta-select option { background: var(--bg-base); }
 
 .meta-hint {
 	font-size: 12.5px;

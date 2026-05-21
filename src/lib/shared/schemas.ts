@@ -198,6 +198,7 @@ export const planSchema = z.object({
 	summary: z.string().nullable().default(null),
 	planType: z.string().nullable().default(null),
 	startDate: z.string().nullable().default(null),
+	projectId: z.string().nullable().default(null),
 	status: planStatusSchema,
 	archivedAt: z.number().int().nonnegative().nullable().default(null),
 	createdAt: z.number().int().nonnegative(),

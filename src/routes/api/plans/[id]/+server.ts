@@ -11,6 +11,7 @@ const updatePlanSchema = z.object({
 	startDate: z.string().nullable().optional(),
 	status: z.enum(['ideation', 'definition', 'execution', 'maintenance']).optional(),
 	archived: z.boolean().optional(),
+	projectId: z.string().nullable().optional(),
 });
 
 export const GET: RequestHandler = async ({ params }) => {
