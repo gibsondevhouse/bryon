@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { closeDb, getDb, initializeDb } from '$lib/server/db/client';
 import { ChatService } from '$lib/server/features/chat/chat';
 import { PersonaService } from '$lib/server/features/personas/persona';
@@ -96,11 +96,16 @@ describe('PromptPresetService', () => {
 	});
 
 	it('lists presets in descending updatedAt order', () => {
+		const t0 = Date.now();
+		vi.setSystemTime(t0);
 		const service = new PromptPresetService(getDb());
 
 		const a = service.create({ name: 'Alpha', body: 'A.' });
+		vi.setSystemTime(t0 + 10);
 		const b = service.create({ name: 'Beta', body: 'B.' });
+		vi.setSystemTime(t0 + 20);
 		service.update(a.id, { name: 'Alpha v2' });
+		vi.useRealTimers();
 
 		const list = service.list();
 		const ids = list.map((p) => p.id);

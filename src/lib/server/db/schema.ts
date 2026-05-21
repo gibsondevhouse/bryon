@@ -278,6 +278,33 @@ export const kbChunksRelations = relations(kbChunks, ({ one }) => ({
 	}),
 }));
 
+// ── Intake scans ──────────────────────────────────────────────────────────────
+
+export const intakeScans = sqliteTable(
+	'intake_scans',
+	{
+		id:               text('id').primaryKey(),
+		folderPath:       text('folder_path').notNull(),
+		status:           text('status', {
+			enum: ['queued', 'running', 'completed', 'cancelled', 'failed'],
+		}).notNull().default('queued'),
+		phase:            text('phase', {
+			enum: ['queued', 'enumerating', 'classifying', 'completed'],
+		}).notNull().default('queued'),
+		filesFound:       integer('files_found').notNull().default(0),
+		filesClassified:  integer('files_classified').notNull().default(0),
+		errorMessage:     text('error_message'),
+		resultJson:       text('result_json'),
+		createdAt:        integer('created_at').notNull(),
+		updatedAt:        integer('updated_at').notNull(),
+		cancelledAt:      integer('cancelled_at'),
+		completedAt:      integer('completed_at'),
+	},
+	(t) => [
+		index('idx_intake_scans_status_created').on(t.status, t.createdAt),
+	],
+);
+
 // ── Plans ─────────────────────────────────────────────────────────────────────
 
 export const plans = sqliteTable(
@@ -291,6 +318,7 @@ export const plans = sqliteTable(
 		status:    text('status', {
 			enum: ['ideation', 'definition', 'execution', 'maintenance'],
 		}).notNull().default('ideation'),
+		projectId:  text('project_id').references(() => projects.id, { onDelete: 'set null' }),
 		archivedAt: integer('archived_at'),
 		createdAt:  integer('created_at').notNull(),
 		updatedAt:  integer('updated_at').notNull(),
@@ -298,5 +326,29 @@ export const plans = sqliteTable(
 	(t) => [
 		index('idx_plans_status_updated_at').on(t.status, t.updatedAt),
 		index('idx_plans_archived_at').on(t.archivedAt),
+		index('idx_plans_project_id').on(t.projectId),
 	],
 );
+
+export const tasks = sqliteTable(
+	'tasks',
+	{
+		id:        text('id').primaryKey(),
+		planId:    text('plan_id').notNull().references(() => plans.id, { onDelete: 'cascade' }),
+		body:      text('body').notNull(),
+		done:      integer('done').notNull().default(0),
+		createdAt: integer('created_at').notNull(),
+		updatedAt: integer('updated_at').notNull(),
+	},
+	(t) => [
+		index('idx_tasks_plan_id').on(t.planId, t.createdAt),
+	],
+);
+
+export const plansRelations = relations(plans, ({ many }) => ({
+	tasks: many(tasks),
+}));
+
+export const tasksRelations = relations(tasks, ({ one }) => ({
+	plan: one(plans, { fields: [tasks.planId], references: [plans.id] }),
+}));

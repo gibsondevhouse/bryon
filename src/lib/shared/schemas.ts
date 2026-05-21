@@ -134,12 +134,71 @@ export const planStatusSchema = z.enum([
 	'maintenance',
 ]);
 
+// ── Intake scans ──────────────────────────────────────────────────────────────
+
+export const intakeScanStatusSchema = z.enum([
+	'queued',
+	'running',
+	'completed',
+	'cancelled',
+	'failed',
+]);
+
+export const intakeScanPhaseSchema = z.enum([
+	'queued',
+	'enumerating',
+	'classifying',
+	'completed',
+]);
+
+export const intakeScanFileKindSchema = z.enum([
+	'image',
+	'document',
+	'text',
+	'code',
+	'data',
+	'media',
+	'other',
+]);
+
+export const intakeScanFileSchema = z.object({
+	path:      z.string().min(1),
+	size:      z.number().int().nonnegative(),
+	kind:      intakeScanFileKindSchema,
+	ext:       z.string(),
+});
+
+export const intakeScanSchema = z.object({
+	id:               z.string().min(1),
+	folderPath:       z.string().min(1),
+	status:           intakeScanStatusSchema,
+	phase:            intakeScanPhaseSchema,
+	filesFound:       z.number().int().nonnegative(),
+	filesClassified:  z.number().int().nonnegative(),
+	errorMessage:     z.string().nullable().default(null),
+	result:           z.array(intakeScanFileSchema).nullable().default(null),
+	createdAt:        z.number().int().nonnegative(),
+	updatedAt:        z.number().int().nonnegative(),
+	cancelledAt:      z.number().int().nonnegative().nullable().default(null),
+	completedAt:      z.number().int().nonnegative().nullable().default(null),
+});
+
+export const taskSchema = z.object({
+	id: z.string().min(1),
+	planId: z.string().min(1),
+	body: z.string().min(1),
+	done: z.boolean().default(false),
+	createdAt: z.number().int().nonnegative(),
+	updatedAt: z.number().int().nonnegative(),
+});
+
 export const planSchema = z.object({
 	id: z.string().min(1),
 	name: z.string().min(1),
 	summary: z.string().nullable().default(null),
 	planType: z.string().nullable().default(null),
 	startDate: z.string().nullable().default(null),
+	projectId: z.string().nullable().default(null),
 	status: planStatusSchema,
 	archivedAt: z.number().int().nonnegative().nullable().default(null),
 	createdAt: z.number().int().nonnegative(),

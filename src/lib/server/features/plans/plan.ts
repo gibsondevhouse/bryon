@@ -29,6 +29,7 @@ export type UpdatePlanInput = Partial<
 > & {
 	status?: PlanStatus;
 	archived?: boolean;
+	projectId?: string | null;
 };
 
 export class PlanService {
@@ -87,6 +88,7 @@ export class PlanService {
 		if (input.archived !== undefined) {
 			values.archivedAt = input.archived ? now : null;
 		}
+		if (input.projectId !== undefined) values.projectId = input.projectId ?? null;
 
 		this.db.update(plans).set(values).where(eq(plans.id, id)).run();
 		return this.get(id);
@@ -104,6 +106,7 @@ function toPlan(row: PlanRow): Plan {
 		summary: row.summary,
 		planType: row.planType,
 		startDate: row.startDate,
+		projectId: row.projectId,
 		status: row.status,
 		archivedAt: row.archivedAt,
 		createdAt: row.createdAt,

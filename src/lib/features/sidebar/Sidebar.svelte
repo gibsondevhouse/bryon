@@ -1,7 +1,7 @@
 <script lang="ts">
 import { goto, invalidateAll } from '$app/navigation';
 import { tick } from 'svelte';
-import { Plus, Settings, PanelLeftClose, MoreHorizontal, Pencil, Sparkles, Archive, Trash2, ChevronDown, Folder, MoveRight } from '@lucide/svelte';
+import { Plus, Settings, PanelLeftClose, MoreHorizontal, Pencil, Sparkles, Archive, Trash2, ChevronDown, Folder, MoveRight, FolderSearch } from '@lucide/svelte';
 import { session, type ThinkingMode } from '$lib/features/streaming/session.svelte';
 import {
 	DropdownMenu,
@@ -371,7 +371,7 @@ function projectChats(projectId: string): Chat[] {
 		</div>
 		{#if planningOpen}
 			{#each visiblePlans as plan (plan.id)}
-				<a class="plan-row" href="/planning" title={plan.name}>
+				<a class="plan-row" href="/planning/{plan.id}" title={plan.name}>
 					<span class="plan-row-name">{plan.name}</span>
 				</a>
 			{:else}
@@ -603,6 +603,10 @@ function projectChats(projectId: string): Chat[] {
 			<span class="dot" class:online={ollamaReachable} class:offline={!ollamaReachable}></span>
 			<span class="status-text">{ollamaReachable ? 'Ollama connected' : 'Ollama offline'}</span>
 		</div>
+		<a class="footer-link" href="/intake">
+			<FolderSearch size={15} />
+			<span>Folder Intake</span>
+		</a>
 		<a class="footer-link" href="/settings">
 			<Settings size={15} />
 			<span>Settings</span>
