@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { FolderSearch, X, RefreshCw, Check, AlertCircle, Loader, FolderOpen } from '@lucide/svelte';
-	import type { IntakeScan, IntakeScanFileKind } from '$lib/shared/types';
+	import type { IntakeScan, IntakeScanFileKind, Project } from '$lib/shared/types';
 
 	let { data } = $props();
 
@@ -107,17 +108,26 @@
 		}
 	}
 
-	// ── Organise action (placeholder) ────────────────────────────────────────
-	function organise(scan: IntakeScan): void {
-		// Summary of kinds
-		const counts: Partial<Record<IntakeScanFileKind, number>> = {};
-		for (const f of scan.result ?? []) {
-			counts[f.kind] = (counts[f.kind] ?? 0) + 1;
+	// ── Organise action → create project ─────────────────────────────────────
+	let organising = $state<string | null>(null);
+
+	async function organise(scan: IntakeScan): Promise<void> {
+		if (organising) return;
+		organising = scan.id;
+		try {
+			const parts = scan.folderPath.replace(/\\/g, '/').split('/').filter(Boolean);
+			const name = parts[parts.length - 1] ?? 'Imported folder';
+			const res = await fetch('/api/projects', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ name, description: `Imported from ${scan.folderPath}` }),
+			});
+			if (!res.ok) return;
+			const { project } = await res.json() as { project: Project };
+			await goto(`/projects/${project.id}`);
+		} finally {
+			organising = null;
 		}
-		const summary = Object.entries(counts)
-			.map(([k, n]) => `${n} ${k}`)
-			.join(', ');
-		alert(`Organise ${scan.filesFound} files (${summary || 'none'}).\nFull organise workflow coming soon.`);
 	}
 
 	// ── Helpers ───────────────────────────────────────────────────────────────
@@ -278,10 +288,16 @@
 							<button
 								class="organise-btn"
 								type="button"
-								onclick={() => organise(scan)}
+								disabled={organising === scan.id}
+								onclick={() => void organise(scan)}
 							>
-								<RefreshCw size={12} />
-								<span>Organise</span>
+								{#if organising === scan.id}
+									<Loader size={12} class="spin" />
+									<span>Creating…</span>
+								{:else}
+									<RefreshCw size={12} />
+									<span>Organise</span>
+								{/if}
 							</button>
 						</div>
 					{/if}
