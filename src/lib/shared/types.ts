@@ -3,6 +3,11 @@ import type {
 	appSettingsSchema,
 	attachmentSchema,
 	chatSchema,
+	intakeScanFileKindSchema,
+	intakeScanFileSchema,
+	intakeScanPhaseSchema,
+	intakeScanSchema,
+	intakeScanStatusSchema,
 	llmParamsSchema,
 	llmSettingsSchema,
 	memorySettingsSchema,
@@ -22,6 +27,11 @@ import type {
 } from './schemas';
 
 export type Attachment = z.infer<typeof attachmentSchema>;
+export type IntakeScanStatus = z.infer<typeof intakeScanStatusSchema>;
+export type IntakeScanPhase = z.infer<typeof intakeScanPhaseSchema>;
+export type IntakeScanFileKind = z.infer<typeof intakeScanFileKindSchema>;
+export type IntakeScanFile = z.infer<typeof intakeScanFileSchema>;
+export type IntakeScan = z.infer<typeof intakeScanSchema>;
 export type MessageRole = z.infer<typeof messageRoleSchema>;
 export type ModelSource = z.infer<typeof modelSourceSchema>;
 export type LLMParams = z.infer<typeof llmParamsSchema>;

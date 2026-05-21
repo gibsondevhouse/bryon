@@ -278,6 +278,33 @@ export const kbChunksRelations = relations(kbChunks, ({ one }) => ({
 	}),
 }));
 
+// ── Intake scans ──────────────────────────────────────────────────────────────
+
+export const intakeScans = sqliteTable(
+	'intake_scans',
+	{
+		id:               text('id').primaryKey(),
+		folderPath:       text('folder_path').notNull(),
+		status:           text('status', {
+			enum: ['queued', 'running', 'completed', 'cancelled', 'failed'],
+		}).notNull().default('queued'),
+		phase:            text('phase', {
+			enum: ['queued', 'enumerating', 'classifying', 'completed'],
+		}).notNull().default('queued'),
+		filesFound:       integer('files_found').notNull().default(0),
+		filesClassified:  integer('files_classified').notNull().default(0),
+		errorMessage:     text('error_message'),
+		resultJson:       text('result_json'),
+		createdAt:        integer('created_at').notNull(),
+		updatedAt:        integer('updated_at').notNull(),
+		cancelledAt:      integer('cancelled_at'),
+		completedAt:      integer('completed_at'),
+	},
+	(t) => [
+		index('idx_intake_scans_status_created').on(t.status, t.createdAt),
+	],
+);
+
 // ── Plans ─────────────────────────────────────────────────────────────────────
 
 export const plans = sqliteTable(
