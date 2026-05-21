@@ -183,6 +183,15 @@ export const intakeScanSchema = z.object({
 	completedAt:      z.number().int().nonnegative().nullable().default(null),
 });
 
+export const taskSchema = z.object({
+	id: z.string().min(1),
+	planId: z.string().min(1),
+	body: z.string().min(1),
+	done: z.boolean().default(false),
+	createdAt: z.number().int().nonnegative(),
+	updatedAt: z.number().int().nonnegative(),
+});
+
 export const planSchema = z.object({
 	id: z.string().min(1),
 	name: z.string().min(1),

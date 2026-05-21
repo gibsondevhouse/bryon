@@ -327,3 +327,26 @@ export const plans = sqliteTable(
 		index('idx_plans_archived_at').on(t.archivedAt),
 	],
 );
+
+export const tasks = sqliteTable(
+	'tasks',
+	{
+		id:        text('id').primaryKey(),
+		planId:    text('plan_id').notNull().references(() => plans.id, { onDelete: 'cascade' }),
+		body:      text('body').notNull(),
+		done:      integer('done').notNull().default(0),
+		createdAt: integer('created_at').notNull(),
+		updatedAt: integer('updated_at').notNull(),
+	},
+	(t) => [
+		index('idx_tasks_plan_id').on(t.planId, t.createdAt),
+	],
+);
+
+export const plansRelations = relations(plans, ({ many }) => ({
+	tasks: many(tasks),
+}));
+
+export const tasksRelations = relations(tasks, ({ one }) => ({
+	plan: one(plans, { fields: [tasks.planId], references: [plans.id] }),
+}));

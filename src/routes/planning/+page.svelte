@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { Plus, X, Upload, FileText, File, Image, Mic, Video, ClipboardPaste } from '@lucide/svelte';
+	import { goto } from '$app/navigation';
+	import { Plus, X, Upload, FileText, File, Image, Mic, Video, ClipboardPaste, Archive } from '@lucide/svelte';
 	import { Dialog, DialogContent, DialogTitle } from '$lib/ui/dialog';
 	import { session } from '$lib/features/streaming/session.svelte';
 	import type { Plan, PlanStatus } from '$lib/shared/types';
@@ -147,6 +148,33 @@
 		}
 	}
 
+	let justDragged = $state(false);
+
+	function onDragStartWrapped(e: DragEvent, plan: Plan): void {
+		justDragged = false;
+		onDragStart(e, plan);
+	}
+
+	function onDragEndWrapped(): void {
+		justDragged = true;
+		onDragEnd();
+		setTimeout(() => { justDragged = false; }, 150);
+	}
+
+	function onCardClick(plan: Plan): void {
+		if (justDragged) return;
+		goto(`/planning/${plan.id}`);
+	}
+
+	async function archivePlan(e: MouseEvent, plan: Plan): Promise<void> {
+		e.stopPropagation();
+		const res = await fetch(`/api/plans/${plan.id}`, { method: 'DELETE' });
+		if (res.ok) {
+			plans = plans.filter((p) => p.id !== plan.id);
+			session.plans = session.plans.filter((p) => p.id !== plan.id);
+		}
+	}
+
 	function formatDate(ts: number): string {
 		return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 	}
@@ -185,14 +213,25 @@
 							draggable="true"
 							role="button"
 							tabindex="0"
-							ondragstart={(e) => onDragStart(e, plan)}
-							ondragend={onDragEnd}
+							ondragstart={(e) => onDragStartWrapped(e, plan)}
+							ondragend={onDragEndWrapped}
+							onclick={() => onCardClick(plan)}
+							onkeydown={(e) => e.key === 'Enter' && onCardClick(plan)}
 						>
 							<div class="card-top">
 								{#if col.id === 'maintenance'}
 									<span class="live-dot" aria-label="Live"></span>
 								{/if}
 								<span class="plan-name">{plan.name}</span>
+								<button
+									class="card-archive-btn"
+									type="button"
+									title="Archive plan"
+									aria-label="Archive {plan.name}"
+									onclick={(e) => void archivePlan(e, plan)}
+								>
+									<Archive size={11} />
+								</button>
 							</div>
 							<span class="plan-date">{formatDate(plan.createdAt)}</span>
 						</div>
@@ -515,6 +554,31 @@
 
 .plan-card:hover .plan-date {
 	opacity: 1;
+}
+
+.card-archive-btn {
+	flex-shrink: 0;
+	display: grid;
+	place-items: center;
+	width: 20px;
+	height: 20px;
+	border: 1px solid transparent;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--text-placeholder);
+	cursor: pointer;
+	opacity: 0;
+	margin-top: 1px;
+	transition: opacity var(--motion-fast), background var(--motion-fast), color var(--motion-fast);
+}
+
+.plan-card:hover .card-archive-btn {
+	opacity: 1;
+}
+
+.card-archive-btn:hover {
+	background: rgba(248, 113, 113, 0.12);
+	color: var(--red, #f87171);
 }
 
 /* ── Live indicator (Maintenance column) ── */

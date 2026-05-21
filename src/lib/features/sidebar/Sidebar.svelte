@@ -371,7 +371,7 @@ function projectChats(projectId: string): Chat[] {
 		</div>
 		{#if planningOpen}
 			{#each visiblePlans as plan (plan.id)}
-				<a class="plan-row" href="/planning" title={plan.name}>
+				<a class="plan-row" href="/planning/{plan.id}" title={plan.name}>
 					<span class="plan-row-name">{plan.name}</span>
 				</a>
 			{:else}

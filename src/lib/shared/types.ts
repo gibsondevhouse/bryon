@@ -23,6 +23,7 @@ import type {
 	promptPresetSchema,
 	settingsSchema,
 	streamRequestSchema,
+	taskSchema,
 	webSearchSettingsSchema,
 } from './schemas';
 
@@ -38,6 +39,7 @@ export type LLMParams = z.infer<typeof llmParamsSchema>;
 export type Persona = z.infer<typeof personaSchema>;
 export type Chat = z.infer<typeof chatSchema>;
 export type Message = z.infer<typeof messageSchema>;
+export type Task = z.infer<typeof taskSchema>;
 export type Plan = z.infer<typeof planSchema>;
 export type PlanStatus = z.infer<typeof planStatusSchema>;
 export type Project = z.infer<typeof projectSchema>;
