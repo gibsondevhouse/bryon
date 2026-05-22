@@ -18,26 +18,26 @@ import {
 import { session } from '$lib/features/streaming/session.svelte';
 import { fmtDateTime, fmtDate } from '$lib/utils';
 import DoctrineStatusBadge from '$lib/features/doctrine/DoctrineStatusBadge.svelte';
-import type { Plan, PlanStatus, Task } from '$lib/shared/types';
+import type { Plan, Task } from '$lib/shared/types';
 import type { Action } from 'svelte/action';
 
 let { data } = $props();
 
 const online = $derived(data.ollamaReachable ?? session.ollamaReachable);
 
-const allPlans = $derived((data.plans ?? []).filter((p: Plan) => !p.archivedAt));
+const allPlans = $derived(
+	(data.plans ?? []).filter((p: Plan) => !p.archivedAt),
+);
 
-function lifecycleFor(status: PlanStatus): string {
-	const m: Record<string, string> = {
-		ideation: 'proposed', definition: 'drafting', drafting: 'drafting',
-		execution: 'active', active: 'active', maintenance: 'archived',
-	};
-	return m[status] ?? 'proposed';
-}
-
-const activePlans = $derived(allPlans.filter((p: Plan) => ['execution', 'active'].includes(p.status)));
-const draftingPlans = $derived(allPlans.filter((p: Plan) => ['definition', 'drafting'].includes(p.status)));
-const proposedPlans = $derived(allPlans.filter((p: Plan) => p.status === 'ideation'));
+const activePlans = $derived(
+	allPlans.filter((p: Plan) => p.doctrineLifecycle === 'active'),
+);
+const draftingPlans = $derived(
+	allPlans.filter((p: Plan) => p.doctrineLifecycle === 'drafting'),
+);
+const proposedPlans = $derived(
+	allPlans.filter((p: Plan) => p.doctrineLifecycle === 'proposed'),
+);
 
 const allTasks = $derived((data.tasks ?? []) as Task[]);
 const tasksByStatus = $derived({
@@ -46,10 +46,16 @@ const tasksByStatus = $derived({
 	blocked: allTasks.filter((t: Task) => t.status === 'blocked').length,
 	completed: allTasks.filter((t: Task) => t.status === 'completed').length,
 });
-const totalActive = $derived(tasksByStatus.planned + tasksByStatus.in_progress + tasksByStatus.blocked);
+const totalActive = $derived(
+	tasksByStatus.planned + tasksByStatus.in_progress + tasksByStatus.blocked,
+);
 
 const recentChats = $derived(data.chats.slice(0, 4));
-const recentProjects = $derived((data.projects ?? []).filter((p: { archivedAt?: number | null }) => !p.archivedAt).slice(0, 3));
+const recentProjects = $derived(
+	(data.projects ?? [])
+		.filter((p: { archivedAt?: number | null }) => !p.archivedAt)
+		.slice(0, 3),
+);
 
 let mode = $state<'chat' | 'web'>('chat');
 let value = $state('');
@@ -58,8 +64,12 @@ let msgsEl = $state<HTMLDivElement | null>(null);
 let chatId = $state<string | null>(null);
 
 const canSend = $derived(value.trim().length > 0);
-const inlineMessages = $derived(chatId ? session.messages.filter((m) => m.role !== 'system') : []);
-const isStreaming = $derived(session.streaming && session.currentChatId === chatId);
+const inlineMessages = $derived(
+	chatId ? session.messages.filter((m) => m.role !== 'system') : [],
+);
+const isStreaming = $derived(
+	session.streaming && session.currentChatId === chatId,
+);
 const isConnecting = $derived(isStreaming && !session.streamingContent);
 const hasInlineChat = $derived(inlineMessages.length > 0 || isStreaming);
 
@@ -101,11 +111,21 @@ function autosize(): void {
 const spotlight: Action<HTMLElement> = (node) => {
 	function move(e: MouseEvent): void {
 		const r = node.getBoundingClientRect();
-		node.style.setProperty('--mx', `${((e.clientX - r.left) / r.width) * 100}%`);
-		node.style.setProperty('--my', `${((e.clientY - r.top) / r.height) * 100}%`);
+		node.style.setProperty(
+			'--mx',
+			`${((e.clientX - r.left) / r.width) * 100}%`,
+		);
+		node.style.setProperty(
+			'--my',
+			`${((e.clientY - r.top) / r.height) * 100}%`,
+		);
 	}
 	node.addEventListener('mousemove', move);
-	return { destroy() { node.removeEventListener('mousemove', move); } };
+	return {
+		destroy() {
+			node.removeEventListener('mousemove', move);
+		},
+	};
 };
 </script>
 
@@ -167,7 +187,7 @@ const spotlight: Action<HTMLElement> = (node) => {
 						{#if isStreaming}
 							<button type="button" class="send stop" aria-label="Stop generating" onclick={() => session.cancel()}><Square size={12} aria-hidden="true" /></button>
 						{:else}
-							<button type="submit" class="send" class:ready={canSend} aria-label="Send" data-testid="start-new-chat"><ArrowUp size={16} aria-hidden="true" /></button>
+								<button type="submit" class="send" class:ready={canSend} aria-label="Send"><ArrowUp size={16} aria-hidden="true" /></button>
 						{/if}
 					</div>
 				</form>
@@ -223,7 +243,7 @@ const spotlight: Action<HTMLElement> = (node) => {
 						<li>
 							<a href="/plans/{plan.id}">
 								<span class="row-name">{plan.name}</span>
-								<DoctrineStatusBadge kind="plan" status={lifecycleFor(plan.status)} />
+								<DoctrineStatusBadge kind="plan" status={plan.doctrineLifecycle} />
 							</a>
 						</li>
 					{/each}

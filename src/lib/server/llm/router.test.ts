@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { settingsSchema } from '$lib/shared/schemas';
-import { routeModel } from './router';
+import { createRemoteRoutePreview, routeModel } from './router';
 
 describe('routeModel', () => {
 	it('keeps classification local on tier 1', () => {
@@ -70,6 +70,81 @@ describe('routeModel', () => {
 			model: 'gemini-3-pro',
 			remote: true,
 			privacyDecision: 'allowed_remote',
+		});
+	});
+
+	it('uses tier 3 remote-capable model only when enabled and configured', () => {
+		const config = settingsSchema.parse({
+			llm: {
+				flash_model: 'gemini-flash',
+			},
+			privacy: {
+				tier3_enabled: true,
+			},
+		});
+		const decision = routeModel({
+			config,
+			taskType: 'summarization',
+			preferRemote: true,
+			remoteApproved: true,
+		});
+
+		expect(decision).toMatchObject({
+			tier: 3,
+			model: 'gemini-flash',
+			remote: true,
+			privacyDecision: 'allowed_remote',
+		});
+	});
+
+	it('hard-denies remote routing for local-only file categories', () => {
+		const config = settingsSchema.parse({
+			llm: {
+				flash_model: 'gemini-flash',
+			},
+			privacy: {
+				tier3_enabled: true,
+			},
+		});
+		const decision = routeModel({
+			config,
+			taskType: 'summarization',
+			preferRemote: true,
+			remoteApproved: true,
+			fileCategories: ['credentials'],
+		});
+
+		expect(decision).toMatchObject({
+			tier: 3,
+			remote: true,
+			blocked: true,
+			privacyDecision: 'blocked_local_only',
+		});
+		expect(decision.policy.blockedCategories).toEqual(['credentials']);
+	});
+
+	it('creates a reusable remote preview payload', () => {
+		const config = settingsSchema.parse({
+			llm: {
+				flash_model: 'gemini-flash',
+			},
+			privacy: {
+				tier3_enabled: true,
+				require_remote_preview: true,
+			},
+		});
+		const decision = routeModel({
+			config,
+			taskType: 'summarization',
+			preferRemote: true,
+			remoteApproved: true,
+		});
+
+		expect(createRemoteRoutePreview(decision)).toMatchObject({
+			taskType: 'summarization',
+			tier: 3,
+			model: 'gemini-flash',
+			requiresApproval: true,
 		});
 	});
 

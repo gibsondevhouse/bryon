@@ -207,7 +207,7 @@ function isActive(href: string): boolean {
 	</div>
 
 	<!-- New chat -->
-	<button class="new-chat" onclick={() => createNewChat()}>
+	<button class="new-chat" onclick={() => createNewChat()} data-testid="start-new-chat">
 		<Plus size={16} strokeWidth={2.5} />
 		<span>New chat</span>
 	</button>

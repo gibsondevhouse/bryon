@@ -2,6 +2,10 @@ import { randomUUID } from 'node:crypto';
 import { routingLogs } from '$lib/server/db/schema';
 import { getDb } from '$lib/server/db/client';
 import type { Settings } from '$lib/shared/types';
+import {
+	evaluateRoutingPolicy,
+	type RoutingPolicyDecision,
+} from '$lib/server/features/routing/policy';
 
 export type ModelTaskType =
 	| 'classification'
@@ -17,6 +21,7 @@ export type PrivacyDecision =
 	| 'allowed_remote'
 	| 'blocked_local_only'
 	| 'tier3_disabled_fallback'
+	| 'remote_model_unconfigured_fallback'
 	| 'remote_preview_required_fallback'
 	| 'chat_pin';
 
@@ -27,7 +32,17 @@ export type RoutingDecision = {
 	remote: boolean;
 	privacyDecision: PrivacyDecision;
 	blocked: boolean;
-	reason: string | null;
+	reason: string;
+	policy: RoutingPolicyDecision;
+};
+
+export type RemoteRoutePreview = {
+	taskType: ModelTaskType;
+	tier: 3 | 4;
+	model: string;
+	requiresApproval: boolean;
+	blockedCategories: string[];
+	reason: string;
 };
 
 export type RouteModelInput = {
@@ -39,6 +54,9 @@ export type RouteModelInput = {
 	highestQuality?: boolean;
 	preferRemote?: boolean;
 	remoteApproved?: boolean;
+	planLocalOnlyCategories?: readonly string[];
+	fileCategories?: readonly string[];
+	sensitive?: boolean;
 };
 
 const HEAVY_TASKS = new Set<ModelTaskType>([
@@ -51,9 +69,27 @@ const HEAVY_TASKS = new Set<ModelTaskType>([
 
 export function routeModel(input: RouteModelInput): RoutingDecision {
 	const localOnly = input.localOnly ?? false;
+	const policy = evaluateRoutingPolicy({
+		settings: input.config.privacy,
+		planLocalOnlyCategories: input.planLocalOnlyCategories,
+		fileCategories: input.fileCategories,
+		explicitLocalOnly: localOnly,
+		sensitive: input.sensitive,
+	});
+	const requestedRemote = input.highestQuality || input.preferRemote;
+
+	if (requestedRemote && policy.allowedTierMax < 3) {
+		const requestedTier = input.highestQuality ? 4 : 3;
+		return remoteDeniedDecision(input, policy, requestedTier);
+	}
 
 	if (input.hasImageAttachment) {
-		return localDecision(input.taskType, 1, input.config.llm.vision_model);
+		return localDecision(
+			input.taskType,
+			1,
+			input.config.llm.vision_model,
+			policy,
+		);
 	}
 
 	if (input.chatPinnedModel) {
@@ -64,28 +100,48 @@ export function routeModel(input: RouteModelInput): RoutingDecision {
 			remote: false,
 			privacyDecision: 'chat_pin',
 			blocked: false,
-			reason: null,
+			reason: 'Chat has a pinned local model.',
+			policy,
 		};
 	}
 
 	if (input.taskType === 'classification') {
-		return localDecision(input.taskType, 1, input.config.llm.small_model || input.config.llm.model);
-	}
-
-	if (input.taskType === 'chat' && !input.highestQuality && !input.preferRemote) {
-		return localDecision(input.taskType, 1, input.config.llm.small_model || input.config.llm.model);
-	}
-
-	if (localOnly) {
-		return localDecision(input.taskType, HEAVY_TASKS.has(input.taskType) ? 2 : 1, HEAVY_TASKS.has(input.taskType)
-			? input.config.llm.large_model || input.config.llm.model
-			: input.config.llm.small_model || input.config.llm.model);
+		return localDecision(
+			input.taskType,
+			1,
+			input.config.llm.small_model || input.config.llm.model,
+			policy,
+		);
 	}
 
 	if (
-		(input.highestQuality || input.preferRemote)
-		&& input.config.privacy.require_remote_preview
-		&& !input.remoteApproved
+		input.taskType === 'chat' &&
+		!input.highestQuality &&
+		!input.preferRemote
+	) {
+		return localDecision(
+			input.taskType,
+			1,
+			input.config.llm.small_model || input.config.llm.model,
+			policy,
+		);
+	}
+
+	if (policy.allowedTierMax < 3) {
+		return localDecision(
+			input.taskType,
+			HEAVY_TASKS.has(input.taskType) ? 2 : 1,
+			HEAVY_TASKS.has(input.taskType)
+				? input.config.llm.large_model || input.config.llm.model
+				: input.config.llm.small_model || input.config.llm.model,
+			policy,
+		);
+	}
+
+	if (
+		(input.highestQuality || input.preferRemote) &&
+		input.config.privacy.require_remote_preview &&
+		!input.remoteApproved
 	) {
 		return {
 			taskType: input.taskType,
@@ -95,10 +151,15 @@ export function routeModel(input: RouteModelInput): RoutingDecision {
 			privacyDecision: 'remote_preview_required_fallback',
 			blocked: false,
 			reason: 'Remote preview is required; using local Tier 2 until approved.',
+			policy,
 		};
 	}
 
-	if (input.highestQuality && input.config.llm.gemini_api.enabled) {
+	if (
+		input.highestQuality &&
+		input.config.llm.gemini_api.enabled &&
+		input.config.llm.gemini_api.model.trim()
+	) {
 		return {
 			taskType: input.taskType,
 			tier: 4,
@@ -106,7 +167,9 @@ export function routeModel(input: RouteModelInput): RoutingDecision {
 			remote: true,
 			privacyDecision: 'allowed_remote',
 			blocked: false,
-			reason: null,
+			reason:
+				'Tier 4 direct Gemini is explicitly enabled and selected for highest-quality work.',
+			policy,
 		};
 	}
 
@@ -120,6 +183,19 @@ export function routeModel(input: RouteModelInput): RoutingDecision {
 				privacyDecision: 'tier3_disabled_fallback',
 				blocked: false,
 				reason: 'Tier 3 is disabled; using local Tier 2.',
+				policy,
+			};
+		}
+		if (!input.config.llm.flash_model.trim()) {
+			return {
+				taskType: input.taskType,
+				tier: 2,
+				model: input.config.llm.large_model || input.config.llm.model,
+				remote: false,
+				privacyDecision: 'remote_model_unconfigured_fallback',
+				blocked: false,
+				reason: 'Tier 3 has no model configured; using local Tier 2.',
+				policy,
 			};
 		}
 		return {
@@ -129,7 +205,8 @@ export function routeModel(input: RouteModelInput): RoutingDecision {
 			remote: true,
 			privacyDecision: 'allowed_remote',
 			blocked: false,
-			reason: null,
+			reason: 'Tier 3 remote-capable model is enabled and selected.',
+			policy,
 		};
 	}
 
@@ -139,6 +216,7 @@ export function routeModel(input: RouteModelInput): RoutingDecision {
 		HEAVY_TASKS.has(input.taskType)
 			? input.config.llm.large_model || input.config.llm.model
 			: input.config.llm.small_model || input.config.llm.model,
+		policy,
 	);
 }
 
@@ -155,6 +233,28 @@ export function refuseRemoteForLocalOnly(input: {
 		privacyDecision: 'blocked_local_only',
 		blocked: true,
 		reason: 'Local-only content cannot be sent to a remote model tier.',
+		policy: {
+			allowedTierMax: 2,
+			blockedCategories: ['explicit_local_only'],
+			previewRequired: false,
+			reasons: [
+				'Local-only content is present; remote model tiers are denied.',
+			],
+		},
+	};
+}
+
+export function createRemoteRoutePreview(
+	decision: RoutingDecision,
+): RemoteRoutePreview | null {
+	if (decision.tier < 3) return null;
+	return {
+		taskType: decision.taskType,
+		tier: decision.tier as 3 | 4,
+		model: decision.model,
+		requiresApproval: decision.policy.previewRequired,
+		blockedCategories: decision.policy.blockedCategories,
+		reason: decision.reason,
 	};
 }
 
@@ -166,24 +266,28 @@ export function logRoutingDecision(
 		errorCode?: string | null;
 	} = {},
 ): void {
-	getDb().insert(routingLogs).values({
-		id: randomUUID(),
-		taskType: decision.taskType,
-		tier: decision.tier,
-		model: decision.model,
-		remote: decision.remote ? 1 : 0,
-		privacyDecision: decision.privacyDecision,
-		tokensIn: input.tokensIn ?? null,
-		tokensOut: input.tokensOut ?? null,
-		errorCode: input.errorCode ?? null,
-		createdAt: Date.now(),
-	}).run();
+	getDb()
+		.insert(routingLogs)
+		.values({
+			id: randomUUID(),
+			taskType: decision.taskType,
+			tier: decision.tier,
+			model: decision.model,
+			remote: decision.remote ? 1 : 0,
+			privacyDecision: decision.privacyDecision,
+			tokensIn: input.tokensIn ?? null,
+			tokensOut: input.tokensOut ?? null,
+			errorCode: input.errorCode ?? null,
+			createdAt: Date.now(),
+		})
+		.run();
 }
 
 function localDecision(
 	taskType: ModelTaskType,
 	tier: 1 | 2,
 	model: string,
+	policy: RoutingPolicyDecision,
 ): RoutingDecision {
 	return {
 		taskType,
@@ -192,6 +296,32 @@ function localDecision(
 		remote: false,
 		privacyDecision: 'allowed_local',
 		blocked: false,
-		reason: null,
+		reason:
+			tier === 1
+				? 'Tier 1 local model selected for light or sensitive-safe work.'
+				: 'Tier 2 local model selected for heavier local work.',
+		policy,
+	};
+}
+
+function remoteDeniedDecision(
+	input: RouteModelInput,
+	policy: RoutingPolicyDecision,
+	tier: 3 | 4,
+): RoutingDecision {
+	const model =
+		tier === 4
+			? input.config.llm.gemini_api.model || 'direct-gemini'
+			: input.config.llm.flash_model || 'remote-tier';
+
+	return {
+		taskType: input.taskType,
+		tier,
+		model,
+		remote: true,
+		privacyDecision: 'blocked_local_only',
+		blocked: true,
+		reason: policy.reasons[0] ?? 'Local-only policy denied remote model use.',
+		policy,
 	};
 }

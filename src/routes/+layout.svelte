@@ -27,7 +27,7 @@ let hasViewportSynced = $state(false);
 
 const currentChatId = $derived(page.params?.id ?? null);
 const isFullBleed   = $derived(
-	page.url.pathname === '/planning' || page.url.pathname === '/projects' ||
+	page.url.pathname === '/projects' ||
 	page.url.pathname === '/plans' || page.url.pathname === '/execution'
 );
 
@@ -278,7 +278,6 @@ function onGlobalKey(e: KeyboardEvent): void {
 	flex-direction: column;
 	min-height: 0;
 	overflow: auto;
-	padding: var(--sp-6);
 }
 
 .content.full-bleed {
@@ -367,8 +366,5 @@ function onGlobalKey(e: KeyboardEvent): void {
 		cursor: default;
 	}
 
-	.content {
-		padding: var(--sp-4);
-	}
 }
 </style>

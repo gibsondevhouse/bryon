@@ -8,12 +8,15 @@ import {
 	parsePositiveIntegerParam,
 } from '$lib/server/http';
 import { PlanService } from '$lib/server/features/plans/plan';
+import { doctrineLifecycleSchema, planStatusSchema } from '$lib/shared/schemas';
 
 const createPlanSchema = z.object({
 	name: z.string().trim().min(1),
 	summary: z.string().trim().nullable().optional(),
 	planType: z.string().trim().nullable().optional(),
 	startDate: z.string().nullable().optional(),
+	status: planStatusSchema.optional(),
+	doctrineLifecycle: doctrineLifecycleSchema.optional(),
 });
 
 export const GET: RequestHandler = async ({ url }) => {

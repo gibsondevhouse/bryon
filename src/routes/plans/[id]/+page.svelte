@@ -1,51 +1,67 @@
 <script lang="ts">
+import { untrack } from 'svelte';
 import { ArrowLeft, AlertTriangle, Plus, Trash2 } from '@lucide/svelte';
 import { session } from '$lib/features/streaming/session.svelte';
 import { fmtDate } from '$lib/utils';
 import DoctrineStatusBadge from '$lib/features/doctrine/DoctrineStatusBadge.svelte';
 import ReadinessChecklist from '$lib/features/doctrine/ReadinessChecklist.svelte';
 import { evaluatePlanReadiness } from '$lib/features/doctrine/readiness';
-import { planLifecycleLabel } from '$lib/features/doctrine/labels';
 import type { Plan, Task } from '$lib/shared/types';
 
 let { data } = $props();
 
-let plan = $state<Plan>(data.plan);
-let tasks = $state<Task[]>(data.tasks);
+const initialPlan = untrack(() => data.plan);
+const initialTasks = untrack(() => data.tasks);
+
+let plan = $state<Plan>(initialPlan);
+let tasks = $state<Task[]>(initialTasks);
 
 let editingName = $state(false);
-let nameValue = $state(plan.name);
+let nameValue = $state(initialPlan.name);
 let nameInput: HTMLInputElement | undefined = $state();
 
-let missionGap = $state('');
-let missionContext = $state('');
-let intentPurpose = $state('');
-let intentEndState = $state('');
-let intentKeyTasks = $state<string[]>([]);
-let intentConstraints = $state<string[]>([]);
+let missionGap = $state(initialPlan.doctrine.missionNeed.gap ?? '');
+let missionContext = $state(initialPlan.doctrine.missionNeed.context ?? '');
+let intentPurpose = $state(initialPlan.doctrine.commandersIntent.purpose ?? '');
+let intentEndState = $state(
+	initialPlan.doctrine.commandersIntent.endState ?? '',
+);
+let intentKeyTasks = $state<string[]>(
+	initialPlan.doctrine.commandersIntent.keyTasks,
+);
+let intentConstraints = $state<string[]>(
+	initialPlan.doctrine.commandersIntent.constraints,
+);
 
-const readiness = $derived(evaluatePlanReadiness(
-	{
-		lifecycle: null,
-		missionNeed: { gap: missionGap || null, context: missionContext || null, priority: null, source: null },
-		commandersIntent: { purpose: intentPurpose || null, keyTasks: intentKeyTasks.filter(Boolean), endState: intentEndState || null, constraints: intentConstraints.filter(Boolean) },
-		lineOfEffort: [],
-		oplan: { missionStatement: null, executionTimeline: [], taskOrganization: [], sustainment: [], annexes: [], references: [] },
-	},
-	[],
-));
-
-function doctrineLifecycle(status: string): string {
-	const map: Record<string, string> = {
-		ideation: 'proposed',
-		definition: 'drafting',
-		execution: 'active',
-		maintenance: 'archived',
-		drafting: 'drafting',
-		active: 'active',
-	};
-	return map[status] ?? 'proposed';
-}
+const readiness = $derived(
+	evaluatePlanReadiness(
+		{
+			lifecycle: plan.doctrineLifecycle,
+			missionNeed: {
+				gap: missionGap || null,
+				context: missionContext || null,
+				priority: null,
+				source: null,
+			},
+			commandersIntent: {
+				purpose: intentPurpose || null,
+				keyTasks: intentKeyTasks.filter(Boolean),
+				endState: intentEndState || null,
+				constraints: intentConstraints.filter(Boolean),
+			},
+			lineOfEffort: [],
+			oplan: {
+				missionStatement: null,
+				executionTimeline: [],
+				taskOrganization: [],
+				sustainment: [],
+				annexes: [],
+				references: [],
+			},
+		},
+		[],
+	),
+);
 
 function startNameEdit(): void {
 	nameValue = plan.name;
@@ -69,7 +85,9 @@ async function commitName(): Promise<void> {
 		if (res.ok) {
 			const { plan: updated } = await res.json();
 			plan = updated;
-			session.plans = session.plans.map((p) => (p.id === plan.id ? updated : p));
+			session.plans = session.plans.map((p) =>
+				p.id === plan.id ? updated : p,
+			);
 		}
 	} catch {
 		// silent
@@ -77,8 +95,12 @@ async function commitName(): Promise<void> {
 }
 
 function onNameKey(e: KeyboardEvent): void {
-	if (e.key === 'Enter') { e.preventDefault(); void commitName(); }
-	else if (e.key === 'Escape') { editingName = false; }
+	if (e.key === 'Enter') {
+		e.preventDefault();
+		void commitName();
+	} else if (e.key === 'Escape') {
+		editingName = false;
+	}
 }
 
 let newTaskTitle = $state('');
@@ -152,7 +174,7 @@ const completedTasks = $derived(tasks.filter((t) => t.done));
 				{:else}
 					<h1 class="ws-title" ondblclick={startNameEdit}>{plan.name}</h1>
 				{/if}
-				<DoctrineStatusBadge kind="plan" status={doctrineLifecycle(plan.status)} />
+				<DoctrineStatusBadge kind="plan" status={plan.doctrineLifecycle} />
 			</div>
 			<div class="ws-meta">
 				<span>Created {fmtDate(plan.createdAt)}</span>
@@ -285,6 +307,7 @@ const completedTasks = $derived(tasks.filter((t) => t.done));
 	max-width: 1200px;
 	width: 100%;
 	margin: 0 auto;
+	padding: var(--sp-6);
 }
 
 .ws-header {

@@ -316,6 +316,7 @@
 	margin: 0 auto;
 	width: 100%;
 	gap: var(--sp-6);
+	padding: var(--sp-6);
 }
 
 /* ── Header ── */

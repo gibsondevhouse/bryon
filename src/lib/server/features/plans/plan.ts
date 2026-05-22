@@ -2,7 +2,14 @@ import { randomUUID } from 'node:crypto';
 import { and, asc, desc, eq, isNull, ne } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { planCardSchema, planSchema, taskSchema } from '$lib/shared/schemas';
-import type { Plan, PlanCard, PlanStatus, Task, TaskStatus } from '$lib/shared/types';
+import type {
+	DoctrineLifecycle,
+	Plan,
+	PlanCard,
+	PlanStatus,
+	Task,
+	TaskStatus,
+} from '$lib/shared/types';
 import { getDb } from '$lib/server/db/client';
 import type * as schema from '$lib/server/db/schema';
 import { planCards, plans, tasks } from '$lib/server/db/schema';
@@ -23,15 +30,59 @@ export type CreatePlanInput = {
 	planType?: string | null;
 	startDate?: string | null;
 	status?: PlanStatus;
+	doctrineLifecycle?: DoctrineLifecycle;
 };
 
 export type UpdatePlanInput = Partial<
 	Pick<CreatePlanInput, 'name' | 'summary' | 'planType' | 'startDate'>
 > & {
 	status?: PlanStatus;
+	doctrineLifecycle?: DoctrineLifecycle;
 	archived?: boolean;
 	projectId?: string | null;
 };
+
+export const DOCTRINE_LIFECYCLE_TRANSITIONS: Record<
+	DoctrineLifecycle,
+	readonly DoctrineLifecycle[]
+> = {
+	proposed: ['drafting'],
+	drafting: ['active'],
+	active: ['archived'],
+	archived: [],
+};
+
+export class PlanLifecycleTransitionError extends Error {
+	readonly code = 'INVALID_PLAN_LIFECYCLE_TRANSITION';
+	readonly details: {
+		from: DoctrineLifecycle;
+		to: DoctrineLifecycle;
+		allowed: readonly DoctrineLifecycle[];
+	};
+
+	constructor(from: DoctrineLifecycle, to: DoctrineLifecycle) {
+		const allowed = DOCTRINE_LIFECYCLE_TRANSITIONS[from];
+		super(`Plan lifecycle cannot transition from ${from} to ${to}.`);
+		this.name = 'PlanLifecycleTransitionError';
+		this.details = { from, to, allowed };
+	}
+}
+
+export function canTransitionDoctrineLifecycle(
+	from: DoctrineLifecycle,
+	to: DoctrineLifecycle,
+): boolean {
+	return from === to || DOCTRINE_LIFECYCLE_TRANSITIONS[from].includes(to);
+}
+
+export function assertDoctrineLifecycleTransition(
+	from: DoctrineLifecycle,
+	to: DoctrineLifecycle,
+): void {
+	if (!canTransitionDoctrineLifecycle(from, to)) {
+		throw new PlanLifecycleTransitionError(from, to);
+	}
+}
 
 export class PlanService {
 	constructor(private readonly db: Db = getDb()) {}
@@ -59,16 +110,21 @@ export class PlanService {
 	create(input: CreatePlanInput): Plan {
 		const now = Date.now();
 		const id = input.id ?? randomUUID();
-		this.db.insert(plans).values({
-			id,
-			name: input.name.trim(),
-			summary: input.summary?.trim() ?? null,
-			planType: input.planType?.trim() ?? null,
-			startDate: input.startDate ?? null,
-			status: input.status ?? 'ideation',
-			createdAt: now,
-			updatedAt: now,
-		}).run();
+		const doctrineLifecycle = resolveDoctrineLifecycle(input);
+		this.db
+			.insert(plans)
+			.values({
+				id,
+				name: input.name.trim(),
+				summary: input.summary?.trim() ?? null,
+				planType: input.planType?.trim() ?? null,
+				startDate: input.startDate ?? null,
+				status: statusForDoctrineLifecycle(doctrineLifecycle),
+				doctrineLifecycle,
+				createdAt: now,
+				updatedAt: now,
+			})
+			.run();
 		const created = this.get(id);
 		if (!created) throw new Error('Failed to create plan');
 		return created;
@@ -80,16 +136,44 @@ export class PlanService {
 
 		const now = Date.now();
 		const values: Partial<PlanRow> = { updatedAt: now };
+		const targetLifecycle = resolveDoctrineLifecycle(
+			input,
+			existing.doctrineLifecycle,
+		);
+
+		if (targetLifecycle !== existing.doctrineLifecycle) {
+			assertDoctrineLifecycleTransition(
+				existing.doctrineLifecycle,
+				targetLifecycle,
+			);
+			values.doctrineLifecycle = targetLifecycle;
+			values.status = statusForDoctrineLifecycle(targetLifecycle);
+			values.archivedAt =
+				targetLifecycle === 'archived' ? now : existing.archivedAt;
+		}
 
 		if (input.name !== undefined) values.name = input.name.trim();
-		if (input.summary !== undefined) values.summary = input.summary?.trim() ?? null;
-		if (input.planType !== undefined) values.planType = input.planType?.trim() ?? null;
-		if (input.startDate !== undefined) values.startDate = input.startDate ?? null;
-		if (input.status !== undefined) values.status = input.status;
+		if (input.summary !== undefined)
+			values.summary = input.summary?.trim() ?? null;
+		if (input.planType !== undefined)
+			values.planType = input.planType?.trim() ?? null;
+		if (input.startDate !== undefined)
+			values.startDate = input.startDate ?? null;
 		if (input.archived !== undefined) {
-			values.archivedAt = input.archived ? now : null;
+			if (input.archived) {
+				assertDoctrineLifecycleTransition(
+					existing.doctrineLifecycle,
+					'archived',
+				);
+				values.doctrineLifecycle = 'archived';
+				values.status = statusForDoctrineLifecycle('archived');
+				values.archivedAt = now;
+			} else {
+				values.archivedAt = null;
+			}
 		}
-		if (input.projectId !== undefined) values.projectId = input.projectId ?? null;
+		if (input.projectId !== undefined)
+			values.projectId = input.projectId ?? null;
 
 		this.db.update(plans).set(values).where(eq(plans.id, id)).run();
 		return this.get(id);
@@ -100,8 +184,9 @@ export class PlanService {
 	}
 }
 
-// Phase 101: Doctrine fields are not mapped. Phase 102 adds toPlanWithDoctrine().
 function toPlan(row: PlanRow): Plan {
+	const doctrineLifecycle =
+		row.doctrineLifecycle ?? doctrineLifecycleForStatus(row.status);
 	return planSchema.parse({
 		id: row.id,
 		name: row.name,
@@ -109,11 +194,92 @@ function toPlan(row: PlanRow): Plan {
 		planType: row.planType,
 		startDate: row.startDate,
 		projectId: row.projectId,
-		status: row.status,
+		status: statusForDoctrineLifecycle(doctrineLifecycle),
+		doctrineLifecycle,
+		doctrine: {
+			lifecycle: doctrineLifecycle,
+			missionNeed: {
+				gap: row.missionNeedGap,
+				context: row.missionNeedContext,
+				priority: row.missionNeedPriority,
+				source: row.missionNeedSource,
+			},
+			commandersIntent: {
+				purpose: row.intentPurpose,
+				keyTasks: parseStringArray(row.intentKeyTasksJson),
+				endState: row.intentEndState,
+				constraints: parseStringArray(row.intentConstraintsJson),
+			},
+			lineOfEffort: parseStringArray(row.lineOfEffortJson),
+			oplan: {
+				missionStatement: row.oplanMissionStatement,
+				executionTimeline: parseStringArray(row.oplanExecutionTimelineJson),
+				taskOrganization: parseStringArray(row.oplanTaskOrganizationJson),
+				sustainment: parseStringArray(row.oplanSustainmentJson),
+				annexes: parseStringArray(row.oplanAnnexesJson),
+				references: parseStringArray(row.oplanReferencesJson),
+			},
+		},
 		archivedAt: row.archivedAt,
 		createdAt: row.createdAt,
 		updatedAt: row.updatedAt,
 	});
+}
+
+function resolveDoctrineLifecycle(
+	input: Pick<CreatePlanInput, 'status' | 'doctrineLifecycle'> & {
+		archived?: boolean;
+	},
+	fallback: DoctrineLifecycle = 'proposed',
+): DoctrineLifecycle {
+	if (input.archived === true) return 'archived';
+	if (input.doctrineLifecycle !== undefined) return input.doctrineLifecycle;
+	if (input.status !== undefined)
+		return doctrineLifecycleForStatus(input.status);
+	return fallback;
+}
+
+function doctrineLifecycleForStatus(status: PlanStatus): DoctrineLifecycle {
+	switch (status) {
+		case 'definition':
+		case 'drafting':
+			return 'drafting';
+		case 'execution':
+		case 'active':
+			return 'active';
+		case 'maintenance':
+			return 'archived';
+		case 'ideation':
+			return 'proposed';
+	}
+}
+
+function statusForDoctrineLifecycle(lifecycle: DoctrineLifecycle): PlanStatus {
+	switch (lifecycle) {
+		case 'proposed':
+			return 'ideation';
+		case 'drafting':
+			return 'drafting';
+		case 'active':
+			return 'active';
+		case 'archived':
+			return 'maintenance';
+	}
+}
+
+function parseStringArray(value: string | null): string[] {
+	if (!value) return [];
+	try {
+		const parsed: unknown = JSON.parse(value);
+		return Array.isArray(parsed)
+			? parsed.filter(
+					(item): item is string =>
+						typeof item === 'string' && item.trim().length > 0,
+				)
+			: [];
+	} catch {
+		return [];
+	}
 }
 
 // ── TaskService (new API — title/description/status) ─────────────────────────
@@ -151,8 +317,10 @@ export class TaskService {
 		const limit = Math.min(Math.max(1, input.limit ?? 200), 500);
 		const offset = Math.max(0, input.offset ?? 0);
 		const conditions = [];
-		if (input.planId !== undefined) conditions.push(eq(tasks.planId, input.planId));
-		if (input.projectId !== undefined) conditions.push(eq(tasks.projectId, input.projectId));
+		if (input.planId !== undefined)
+			conditions.push(eq(tasks.planId, input.planId));
+		if (input.projectId !== undefined)
+			conditions.push(eq(tasks.projectId, input.projectId));
 		if (!input.includeArchived) conditions.push(ne(tasks.status, 'archived'));
 		const query = this.db
 			.select()
@@ -160,9 +328,10 @@ export class TaskService {
 			.orderBy(asc(tasks.sortOrder), asc(tasks.createdAt))
 			.limit(limit)
 			.offset(offset);
-		const rows = conditions.length > 0
-			? query.where(and(...conditions)).all()
-			: query.all();
+		const rows =
+			conditions.length > 0
+				? query.where(and(...conditions)).all()
+				: query.all();
 		return rows.map(toTask);
 	}
 
@@ -174,21 +343,24 @@ export class TaskService {
 	create(input: CreateTaskInput): Task {
 		const now = Date.now();
 		const id = randomUUID();
-		this.db.insert(tasks).values({
-			id,
-			planId: input.planId,
-			body: '',
-			done: 0,
-			title: input.title.trim(),
-			description: input.description?.trim() ?? null,
-			status: input.status ?? 'planned',
-			projectId: input.projectId ?? null,
-			assignee: input.assignee ?? null,
-			dueDate: input.dueDate ?? null,
-			sortOrder: input.sortOrder ?? null,
-			createdAt: now,
-			updatedAt: now,
-		}).run();
+		this.db
+			.insert(tasks)
+			.values({
+				id,
+				planId: input.planId,
+				body: '',
+				done: 0,
+				title: input.title.trim(),
+				description: input.description?.trim() ?? null,
+				status: input.status ?? 'planned',
+				projectId: input.projectId ?? null,
+				assignee: input.assignee ?? null,
+				dueDate: input.dueDate ?? null,
+				sortOrder: input.sortOrder ?? null,
+				createdAt: now,
+				updatedAt: now,
+			})
+			.run();
 		const created = this.get(id);
 		if (!created) throw new Error(`Task "${id}" was not created.`);
 		return created;
@@ -200,13 +372,17 @@ export class TaskService {
 		const now = Date.now();
 		const values: Partial<typeof tasks.$inferInsert> = { updatedAt: now };
 		if (input.title !== undefined) values.title = input.title.trim();
-		if (input.description !== undefined) values.description = input.description?.trim() ?? null;
+		if (input.description !== undefined)
+			values.description = input.description?.trim() ?? null;
 		if (input.status !== undefined) values.status = input.status;
-		if (input.projectId !== undefined) values.projectId = input.projectId ?? null;
+		if (input.projectId !== undefined)
+			values.projectId = input.projectId ?? null;
 		if (input.assignee !== undefined) values.assignee = input.assignee ?? null;
 		if (input.dueDate !== undefined) values.dueDate = input.dueDate ?? null;
-		if (input.sortOrder !== undefined) values.sortOrder = input.sortOrder ?? null;
-		if (input.archived !== undefined) values.status = input.archived ? 'archived' : existing.status;
+		if (input.sortOrder !== undefined)
+			values.sortOrder = input.sortOrder ?? null;
+		if (input.archived !== undefined)
+			values.status = input.archived ? 'archived' : existing.status;
 		this.db.update(tasks).set(values).where(eq(tasks.id, id)).run();
 		return this.get(id);
 	}
@@ -214,19 +390,19 @@ export class TaskService {
 
 function toTask(row: TaskRow): Task {
 	return taskSchema.parse({
-		id:          row.id,
-		planId:      row.planId,
-		body:        row.body ?? '',
-		done:        row.done === 1,
-		title:       row.title ?? '',
+		id: row.id,
+		planId: row.planId,
+		body: row.body ?? '',
+		done: row.done === 1,
+		title: row.title ?? '',
 		description: row.description ?? null,
-		status:      row.status ?? 'planned',
-		projectId:   row.projectId ?? null,
-		assignee:    row.assignee ?? null,
-		dueDate:     row.dueDate ?? null,
-		sortOrder:   row.sortOrder ?? null,
-		createdAt:   row.createdAt,
-		updatedAt:   row.updatedAt,
+		status: row.status ?? 'planned',
+		projectId: row.projectId ?? null,
+		assignee: row.assignee ?? null,
+		dueDate: row.dueDate ?? null,
+		sortOrder: row.sortOrder ?? null,
+		createdAt: row.createdAt,
+		updatedAt: row.updatedAt,
 	});
 }
 
@@ -236,13 +412,33 @@ type PlanCardRow = typeof planCards.$inferSelect;
 
 export type ListPlanCardsInput = {
 	planId: string;
-	series?: '100' | '200' | '300' | '400' | '500' | '600' | '700' | '800' | '900' | '1000';
+	series?:
+		| '100'
+		| '200'
+		| '300'
+		| '400'
+		| '500'
+		| '600'
+		| '700'
+		| '800'
+		| '900'
+		| '1000';
 	includeArchived?: boolean;
 };
 
 export type CreatePlanCardInput = {
 	planId: string;
-	series?: '100' | '200' | '300' | '400' | '500' | '600' | '700' | '800' | '900' | '1000';
+	series?:
+		| '100'
+		| '200'
+		| '300'
+		| '400'
+		| '500'
+		| '600'
+		| '700'
+		| '800'
+		| '900'
+		| '1000';
 	title: string;
 	body?: string | null;
 	sortOrder?: number | null;
@@ -250,7 +446,9 @@ export type CreatePlanCardInput = {
 	contextWeight?: 'always' | 'conditional' | 'never';
 };
 
-export type UpdatePlanCardInput = Partial<Omit<CreatePlanCardInput, 'planId'>> & {
+export type UpdatePlanCardInput = Partial<
+	Omit<CreatePlanCardInput, 'planId'>
+> & {
 	archived?: boolean;
 };
 
@@ -259,7 +457,8 @@ export class PlanCardService {
 
 	list(input: ListPlanCardsInput): PlanCard[] {
 		const conditions = [eq(planCards.planId, input.planId)];
-		if (input.series !== undefined) conditions.push(eq(planCards.series, input.series));
+		if (input.series !== undefined)
+			conditions.push(eq(planCards.series, input.series));
 		if (!input.includeArchived) conditions.push(isNull(planCards.archivedAt));
 		return this.db
 			.select()
@@ -271,26 +470,33 @@ export class PlanCardService {
 	}
 
 	get(id: string): PlanCard | null {
-		const row = this.db.select().from(planCards).where(eq(planCards.id, id)).get();
+		const row = this.db
+			.select()
+			.from(planCards)
+			.where(eq(planCards.id, id))
+			.get();
 		return row ? toPlanCard(row) : null;
 	}
 
 	create(input: CreatePlanCardInput): PlanCard {
 		const now = Date.now();
 		const id = randomUUID();
-		this.db.insert(planCards).values({
-			id,
-			planId: input.planId,
-			series: input.series ?? '100',
-			title: input.title.trim(),
-			body: input.body?.trim() ?? null,
-			sortOrder: input.sortOrder ?? null,
-			locked: input.locked ? 1 : 0,
-			contextWeight: input.contextWeight ?? 'conditional',
-			archivedAt: null,
-			createdAt: now,
-			updatedAt: now,
-		}).run();
+		this.db
+			.insert(planCards)
+			.values({
+				id,
+				planId: input.planId,
+				series: input.series ?? '100',
+				title: input.title.trim(),
+				body: input.body?.trim() ?? null,
+				sortOrder: input.sortOrder ?? null,
+				locked: input.locked ? 1 : 0,
+				contextWeight: input.contextWeight ?? 'conditional',
+				archivedAt: null,
+				createdAt: now,
+				updatedAt: now,
+			})
+			.run();
 		const created = this.get(id);
 		if (!created) throw new Error(`Plan card "${id}" was not created.`);
 		return created;
@@ -304,10 +510,13 @@ export class PlanCardService {
 		if (input.series !== undefined) values.series = input.series;
 		if (input.title !== undefined) values.title = input.title.trim();
 		if (input.body !== undefined) values.body = input.body?.trim() ?? null;
-		if (input.sortOrder !== undefined) values.sortOrder = input.sortOrder ?? null;
+		if (input.sortOrder !== undefined)
+			values.sortOrder = input.sortOrder ?? null;
 		if (input.locked !== undefined) values.locked = input.locked ? 1 : 0;
-		if (input.contextWeight !== undefined) values.contextWeight = input.contextWeight;
-		if (input.archived !== undefined) values.archivedAt = input.archived ? now : null;
+		if (input.contextWeight !== undefined)
+			values.contextWeight = input.contextWeight;
+		if (input.archived !== undefined)
+			values.archivedAt = input.archived ? now : null;
 		this.db.update(planCards).set(values).where(eq(planCards.id, id)).run();
 		return this.get(id);
 	}

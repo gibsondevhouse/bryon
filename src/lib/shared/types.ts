@@ -54,6 +54,7 @@ import type {
 	webSearchSettingsSchema,
 } from './schemas';
 import type { DoctrineTerm as SharedDoctrineTerm } from './doctrine';
+import type { BuiltInLocalOnlyCategory } from './routing';
 
 export type Attachment = z.infer<typeof attachmentSchema>;
 export type IntakeScanStatus = z.infer<typeof intakeScanStatusSchema>;
@@ -108,6 +109,7 @@ export type AppearanceSettings = z.infer<typeof appearanceSettingsSchema>;
 export type Settings = z.infer<typeof settingsSchema>;
 export type StreamRequest = z.infer<typeof streamRequestSchema>;
 export type DoctrineTerm = SharedDoctrineTerm;
+export type LocalOnlyCategory = BuiltInLocalOnlyCategory | string;
 
 export type StreamErrorCode =
 	| 'MODEL_NOT_FOUND'
