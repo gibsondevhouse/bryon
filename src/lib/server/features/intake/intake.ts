@@ -1,4 +1,4 @@
-import { promises as fs, readdirSync, statSync } from 'node:fs';
+import { promises as fs, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { extname, join, relative } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { and, desc, eq, inArray } from 'drizzle-orm';
@@ -6,8 +6,11 @@ import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { intakeScanSchema } from '$lib/shared/schemas';
 import type { IntakeScan, IntakeScanFile, IntakeScanFileKind, Plan, Project, Task } from '$lib/shared/types';
 import { getDb } from '$lib/server/db/client';
+import { loadConfig } from '$lib/server/config';
 import type * as schema from '$lib/server/db/schema';
 import { intakeScans } from '$lib/server/db/schema';
+import { PlanService, TaskService } from '$lib/server/features/plans/plan';
+import { ProjectService } from '$lib/server/features/projects/project';
 
 type Db = BetterSQLite3Database<typeof schema>;
 type ScanRow = typeof intakeScans.$inferSelect;
@@ -462,12 +465,64 @@ export class IntakeService {
 			(f) => f.reviewState === 'included',
 		);
 
+		const planSvc     = new PlanService(this.db);
+		const projectSvc  = new ProjectService(this.db);
+		const taskSvc     = new TaskService(this.db);
+
+		const createdPlans: Plan[]    = [];
+		const createdProjects: Project[] = [];
+		const createdTasks: Task[]    = [];
+
+		// Group by plan name → project name
+		const planMap = new Map<string, Plan>();
+		const projectMap = new Map<string, Project>();
+
+		for (const file of includedFiles) {
+			const planName    = file.proposedPlanName    ?? 'Inbox';
+			const projectName = file.proposedProjectName ?? 'Uncategorised';
+
+			if (!planMap.has(planName)) {
+				const plan = planSvc.create({ name: planName, status: 'active' });
+				planMap.set(planName, plan);
+				createdPlans.push(plan);
+			}
+			const plan = planMap.get(planName)!;
+
+			const projKey = `${planName}::${projectName}`;
+			if (!projectMap.has(projKey)) {
+				const project = projectSvc.create({ name: projectName, planId: plan.id, status: 'planned' });
+				projectMap.set(projKey, project);
+				createdProjects.push(project);
+			}
+			const project = projectMap.get(projKey)!;
+
+			const task = taskSvc.create({
+				planId:    plan.id,
+				projectId: project.id,
+				title:     file.path,
+				status:    'proposed',
+			});
+			createdTasks.push(task);
+		}
+
+		// Write a lightweight checkpoint JSON to the workspace .bryon dir
+		const { config } = loadConfig();
+		const checkpointDir = join(config.app.workspace_dir, '.bryon', 'checkpoints');
+		mkdirSync(checkpointDir, { recursive: true });
+		const checkpointPath = join(checkpointDir, `intake-${scan.id}.json`);
+		writeFileSync(checkpointPath, JSON.stringify({
+			scanId:   scan.id,
+			plans:    createdPlans.map((p) => p.id),
+			projects: createdProjects.map((p) => p.id),
+			tasks:    createdTasks.map((t) => t.id),
+		}, null, 2), 'utf8');
+
 		return {
 			fileCount: includedFiles.length,
-			createdPlans: [],
-			createdProjects: [],
-			createdTasks: [],
-			checkpointPath: '',
+			createdPlans,
+			createdProjects,
+			createdTasks,
+			checkpointPath,
 		};
 	}
 }

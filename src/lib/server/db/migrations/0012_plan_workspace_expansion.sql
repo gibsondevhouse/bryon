@@ -1,4 +1,3 @@
---> statement-breakpoint
 ALTER TABLE projects ADD COLUMN plan_id TEXT;
 --> statement-breakpoint
 ALTER TABLE tasks ADD COLUMN title TEXT NOT NULL DEFAULT '';

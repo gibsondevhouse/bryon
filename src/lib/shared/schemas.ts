@@ -23,7 +23,7 @@ export const defaultLLMSettings = {
 	model: 'gemma4:e4b',
 	vision_model: 'gemma4:e4b',
 	small_model: '',
-	large_model: '',
+	large_model: 'gemma4:31b',
 	flash_model: '',
 	gemini_api: { enabled: false, model: '', api_key: '' },
 	thinking: 'normal' as 'off' | 'auto' | 'light' | 'normal' | 'extended',

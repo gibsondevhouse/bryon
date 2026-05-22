@@ -69,17 +69,17 @@ export function routeModel(input: RouteModelInput): RoutingDecision {
 	}
 
 	if (input.taskType === 'classification') {
-		return localDecision(input.taskType, 1, input.config.llm.small_model);
+		return localDecision(input.taskType, 1, input.config.llm.small_model || input.config.llm.model);
 	}
 
 	if (input.taskType === 'chat' && !input.highestQuality && !input.preferRemote) {
-		return localDecision(input.taskType, 1, input.config.llm.small_model);
+		return localDecision(input.taskType, 1, input.config.llm.small_model || input.config.llm.model);
 	}
 
 	if (localOnly) {
 		return localDecision(input.taskType, HEAVY_TASKS.has(input.taskType) ? 2 : 1, HEAVY_TASKS.has(input.taskType)
-			? input.config.llm.large_model
-			: input.config.llm.small_model);
+			? input.config.llm.large_model || input.config.llm.model
+			: input.config.llm.small_model || input.config.llm.model);
 	}
 
 	if (
@@ -90,7 +90,7 @@ export function routeModel(input: RouteModelInput): RoutingDecision {
 		return {
 			taskType: input.taskType,
 			tier: 2,
-			model: input.config.llm.large_model,
+			model: input.config.llm.large_model || input.config.llm.model,
 			remote: false,
 			privacyDecision: 'remote_preview_required_fallback',
 			blocked: false,
@@ -115,7 +115,7 @@ export function routeModel(input: RouteModelInput): RoutingDecision {
 			return {
 				taskType: input.taskType,
 				tier: 2,
-				model: input.config.llm.large_model,
+				model: input.config.llm.large_model || input.config.llm.model,
 				remote: false,
 				privacyDecision: 'tier3_disabled_fallback',
 				blocked: false,
@@ -137,8 +137,8 @@ export function routeModel(input: RouteModelInput): RoutingDecision {
 		input.taskType,
 		HEAVY_TASKS.has(input.taskType) ? 2 : 1,
 		HEAVY_TASKS.has(input.taskType)
-			? input.config.llm.large_model
-			: input.config.llm.small_model,
+			? input.config.llm.large_model || input.config.llm.model
+			: input.config.llm.small_model || input.config.llm.model,
 	);
 }
 
