@@ -29,9 +29,8 @@ async function submit(): Promise<void> {
 	if (!content) return;
 	const id = await session.createChat();
 	if (!id) return;
-	session.draft = content;
-	session.draftWebSearch = mode === 'web';
-	goto(`/chats/${id}`);
+	await goto(`/chats/${id}`);
+	void session.send(id, content, { webSearch: mode === 'web' });
 }
 
 function onKeydown(e: KeyboardEvent): void {
