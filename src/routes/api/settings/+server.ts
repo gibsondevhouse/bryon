@@ -4,10 +4,12 @@ import type { RequestHandler } from './$types';
 import { loadConfig, writeConfig } from '$lib/server/config';
 import { apiError, parseJsonBody } from '$lib/server/http';
 import {
+	appearanceSettingsSchema,
 	appSettingsSchema,
 	llmParamsSchema,
 	llmSettingsSchema,
 	memorySettingsSchema,
+	privacySettingsSchema,
 	settingsSchema,
 	webSearchSettingsSchema,
 } from '$lib/shared/schemas';
@@ -23,6 +25,8 @@ const settingsPatchSchema = z.object({
 		.optional(),
 	web_search: webSearchSettingsSchema.partial().optional(),
 	memory: memorySettingsSchema.partial().optional(),
+	privacy: privacySettingsSchema.partial().optional(),
+	appearance: appearanceSettingsSchema.partial().optional(),
 });
 
 export const GET: RequestHandler = async () => {
@@ -59,6 +63,14 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		memory: {
 			...loaded.config.memory,
 			...parsed.data.memory,
+		},
+		privacy: {
+			...loaded.config.privacy,
+			...parsed.data.privacy,
+		},
+		appearance: {
+			...loaded.config.appearance,
+			...parsed.data.appearance,
 		},
 	});
 

@@ -1,29 +1,37 @@
 <script lang="ts">
 import { onMount } from 'svelte';
 import { untrack } from 'svelte';
-import { ArrowLeft, Save, CheckCircle2, XCircle, Globe, Brain, Eye, BookOpen, Plus, Trash2 } from '@lucide/svelte';
+import { ArrowLeft, Save, CheckCircle2, XCircle, Globe, Brain, Eye, BookOpen, Plus, Trash2, Shield, Layers, Settings2 } from '@lucide/svelte';
 import { Button } from '$lib/ui/button';
 import { Input } from '$lib/ui/input';
 import { session } from '$lib/features/streaming/session.svelte';
 import type { MemoryEntry, PromptPreset } from '$lib/shared/types';
+import type { DoctrineLabelMode } from '$lib/features/doctrine/labels';
 
 let { data } = $props();
 
 const initial = untrack(() => data.settings);
 let model = $state(initial.llm.model);
 let visionModel = $state(initial.llm.vision_model);
+let smallModel = $state(initial.llm.small_model);
+let largeModel = $state(initial.llm.large_model);
+let flashModel = $state(initial.llm.flash_model);
 let temperature = $state(initial.llm.params.temperature);
 let topP = $state(initial.llm.params.top_p);
 let topK = $state(initial.llm.params.top_k);
 let numCtx = $state(initial.llm.params.num_ctx);
 let numPredict = $state(initial.llm.params.num_predict);
 let repeatPenalty = $state(initial.llm.params.repeat_penalty);
+let thinking = $state(initial.llm.thinking);
 let webEnabled = $state(initial.web_search.enabled);
 let searxngUrl = $state(initial.web_search.searxng_url);
 let webMaxResults = $state(initial.web_search.max_results);
 let memoryEnabled = $state(initial.memory.enabled);
 let remember = $state(initial.memory.remember);
 let neverSuggest = $state(initial.memory.never_suggest);
+let tier3Enabled = $state(initial.privacy.tier3_enabled);
+let requireRemotePreview = $state(initial.privacy.require_remote_preview);
+let labelMode = $state<DoctrineLabelMode>(initial.appearance?.doctrine_label_mode ?? 'doctrine_with_helper');
 let saving = $state(false);
 let saved = $state(false);
 let saveError = $state<string | null>(null);
@@ -62,6 +70,10 @@ async function saveSettings(): Promise<void> {
 				llm: {
 					model,
 					vision_model: visionModel,
+					small_model: smallModel,
+					large_model: largeModel,
+					flash_model: flashModel,
+					thinking,
 					params: {
 						temperature: Number(temperature),
 						top_p: Number(topP),
@@ -80,6 +92,13 @@ async function saveSettings(): Promise<void> {
 					enabled: memoryEnabled,
 					remember,
 					never_suggest: neverSuggest,
+				},
+				privacy: {
+					tier3_enabled: tier3Enabled,
+					require_remote_preview: requireRemotePreview,
+				},
+				appearance: {
+					doctrine_label_mode: labelMode,
 				},
 			}),
 		});
@@ -241,8 +260,8 @@ async function archiveMemoryEntry(entry: MemoryEntry): Promise<void> {
 		<a href="/" class="back-link"><ArrowLeft size={16} /> Back</a>
 		<div>
 			<p class="eyebrow">Bryon v1</p>
-			<h1>Rich chat settings</h1>
-			<p class="sub">Configure chat, photo vision, explicit web lookup, and manual memory.</p>
+			<h1>Settings</h1>
+			<p class="sub">Configure models, routing, privacy, workspace, and memory.</p>
 		</div>
 	</header>
 
@@ -272,6 +291,65 @@ async function archiveMemoryEntry(entry: MemoryEntry): Promise<void> {
 		{:else if connection.kind === 'fail'}
 			<div class="notice error"><XCircle size={15} /> {connection.message}</div>
 		{/if}
+	</section>
+
+	<section class="card">
+		<div class="card-title"><Layers size={18} /> Model Tiers</div>
+		<p class="hint">Assign models to routing tiers. Tier 1 (Local) handles all sensitive categories. Tiers 2-4 expand to larger or remote models when privacy allows.</p>
+		<div class="tier-grid">
+			<label>
+				<span>Tier 1 — Local default</span>
+				<Input bind:value={model} placeholder="gemma4:e4b" />
+			</label>
+			<label>
+				<span>Tier 2 — Small / fast</span>
+				<Input bind:value={smallModel} placeholder="e.g. gemma3:1b" />
+			</label>
+			<label>
+				<span>Tier 3 — Large / slow</span>
+				<Input bind:value={largeModel} placeholder="e.g. gemma4:31b" />
+			</label>
+			<label>
+				<span>Tier 4 — Flash / batch</span>
+				<Input bind:value={flashModel} placeholder="Optional" />
+			</label>
+		</div>
+		<label>
+			<span>Thinking mode</span>
+			<select bind:value={thinking} aria-label="Thinking mode">
+				<option value="off">Off</option>
+				<option value="auto">Auto</option>
+				<option value="light">Light</option>
+				<option value="normal">Normal</option>
+				<option value="extended">Extended</option>
+			</select>
+		</label>
+	</section>
+
+	<section class="card">
+		<div class="card-title"><Shield size={18} /> Routing &amp; Privacy</div>
+		<p class="hint">Controls how Bryon routes requests across model tiers. Sensitive categories (medical, legal, financial, identity, credentials, minors, private correspondence) always stay on Tier 1 local.</p>
+		<label class="check-row">
+			<input type="checkbox" bind:checked={tier3Enabled} />
+			<span>Enable Tier 3+ models (large/remote)</span>
+		</label>
+		<label class="check-row">
+			<input type="checkbox" bind:checked={requireRemotePreview} />
+			<span>Require preview before sending to remote models</span>
+		</label>
+	</section>
+
+	<section class="card">
+		<div class="card-title"><Settings2 size={18} /> Workspace</div>
+		<label>
+			<span>Doctrine label style</span>
+			<select bind:value={labelMode} aria-label="Label mode">
+				<option value="doctrine_only">Doctrine only (CONOPS, OPORD, FRAGO...)</option>
+				<option value="doctrine_with_helper">Doctrine + helper (CONOPS — Phase Plan)</option>
+				<option value="plain_first">Plain English first (Phase Plan, Directive...)</option>
+			</select>
+		</label>
+		<p class="hint">Choose how doctrine terms appear in navigation and plan workspace. Helper mode shows both the formal and plain-English label.</p>
 	</section>
 
 	<section class="card">
@@ -474,6 +552,12 @@ label {
 
 .short-field {
 	max-width: 180px;
+}
+
+.tier-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: var(--sp-3);
 }
 
 textarea {

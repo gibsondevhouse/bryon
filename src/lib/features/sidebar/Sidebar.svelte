@@ -1,7 +1,12 @@
 <script lang="ts">
 import { goto, invalidateAll } from '$app/navigation';
+import { page } from '$app/state';
 import { tick } from 'svelte';
-import { Plus, Settings, PanelLeftClose, MoreHorizontal, Pencil, Sparkles, Archive, Trash2, ChevronDown, Folder, MoveRight, FolderSearch, House } from '@lucide/svelte';
+import {
+	Plus, Settings, PanelLeftClose, MoreHorizontal, Pencil, Sparkles,
+	Archive, Trash2, ChevronDown, Folder, MoveRight, FolderSearch, House,
+	Map as MapIcon, ListChecks, ClipboardCheck, RefreshCw,
+} from '@lucide/svelte';
 import { fmtMonthYear } from '$lib/utils';
 import { session, type ThinkingMode } from '$lib/features/streaming/session.svelte';
 import {
@@ -28,75 +33,24 @@ let {
 	onToggle?: () => void;
 } = $props();
 
-// ── Model picker ─────────────────────────────────────────────
-const activeModel = $derived.by(() => {
-	const chat = session.chats.find((c) => c.id === currentChatId);
-	return chat?.resolvedModel ?? chat?.model ?? settings.llm.model;
-});
-
-let modelPickerOpen = $state(false);
-
-function toggleModelPicker(): void {
-	if (session.availableModels.length === 0) return;
-	modelPickerOpen = !modelPickerOpen;
-}
-
-function selectModel(name: string): void {
-	modelPickerOpen = false;
-	if (currentChatId && name !== activeModel) {
-		void session.changeModel(currentChatId, name);
-	}
-}
-
-// ── Thinking mode dropdown ────────────────────────────────────
-const thinkingOptions: { value: ThinkingMode; label: string; description: string }[] = [
-	{ value: 'off',      label: 'Off',      description: 'Reasoning fully disabled' },
-	{ value: 'auto',     label: 'Auto',     description: 'Reason only when needed' },
-	{ value: 'light',    label: 'Light',    description: 'Think briefly, respond directly' },
-	{ value: 'normal',   label: 'Normal',   description: 'Default reasoning depth' },
-	{ value: 'extended', label: 'Extended', description: 'Reason thoroughly on everything' },
-];
-
-let thinkingPickerOpen = $state(false);
-
-function toggleThinkingPicker(): void {
-	thinkingPickerOpen = !thinkingPickerOpen;
-}
-
-function selectThinkingMode(mode: ThinkingMode): void {
-	thinkingPickerOpen = false;
-	session.thinkingMode = mode;
-}
-
-const activeThinkingLabel = $derived(
-	thinkingOptions.find((o) => o.value === session.thinkingMode)?.label ?? 'Normal',
-);
-
 const visibleChats = $derived(session.chats.filter((c) => !c.archived));
 const visibleProjects = $derived(session.projects.filter((project) => !project.archivedAt));
 const visiblePlans = $derived(session.plans.filter((p) => !p.archivedAt));
 const globalChats = $derived(visibleChats.filter((chat) => !chat.projectId));
 
-let projectsOpen = $state(true);
-let planningOpen = $state(true);
+let opsOpen = $state(true);
+let workspaceOpen = $state(true);
+let chatsOpen = $state(false);
 
 let renamingFor = $state<string | null>(null);
 let renameDraft = $state('');
 let renameInput: HTMLInputElement | undefined = $state();
-let renamingProjectFor = $state<string | null>(null);
-let projectRenameDraft = $state('');
-let projectRenameInput: HTMLInputElement | undefined = $state();
+
+const currentPath = $derived(page.url.pathname);
 
 async function createNewChat(projectId: string | null = null): Promise<void> {
 	const id = await session.createChat(projectId);
 	if (id) goto(`/chats/${id}`);
-}
-
-async function createProject(): Promise<void> {
-	const name = prompt('Project name');
-	const trimmed = name?.trim();
-	if (!trimmed) return;
-	await session.createProject(trimmed);
 }
 
 function startRename(chat: Chat): void {
@@ -129,27 +83,6 @@ async function commitRename(chat: Chat): Promise<void> {
 
 function cancelRename(): void {
 	renamingFor = null;
-}
-
-function startProjectRename(project: Project): void {
-	renamingProjectFor = project.id;
-	projectRenameDraft = project.name;
-	void tick().then(() => {
-		projectRenameInput?.focus();
-		projectRenameInput?.select();
-	});
-}
-
-async function commitProjectRename(project: Project): Promise<void> {
-	const next = projectRenameDraft.trim();
-	const current = renamingProjectFor;
-	renamingProjectFor = null;
-	if (!next || next === project.name || current !== project.id) return;
-	await session.updateProject(project.id, { name: next });
-}
-
-function cancelProjectRename(): void {
-	renamingProjectFor = null;
 }
 
 let aiRenamingFor = $state<string | null>(null);
@@ -189,12 +122,6 @@ async function archiveChat(chat: Chat): Promise<void> {
 	}
 }
 
-async function archiveProject(project: Project): Promise<void> {
-	const ok = confirm(`Archive "${project.name}"? Its chats remain available if moved later.`);
-	if (!ok) return;
-	await session.archiveProject(project.id);
-}
-
 async function moveChat(chat: Chat, projectId: string | null): Promise<void> {
 	await session.moveChat(chat.id, projectId);
 	if (chat.id === currentChatId) {
@@ -223,16 +150,6 @@ function onRenameKey(e: KeyboardEvent, chat: Chat): void {
 	} else if (e.key === 'Escape') {
 		e.preventDefault();
 		cancelRename();
-	}
-}
-
-function onProjectRenameKey(e: KeyboardEvent, project: Project): void {
-	if (e.key === 'Enter') {
-		e.preventDefault();
-		void commitProjectRename(project);
-	} else if (e.key === 'Escape') {
-		e.preventDefault();
-		cancelProjectRename();
 	}
 }
 
@@ -269,21 +186,19 @@ const grouped = $derived.by((): Group[] => {
 	return [...map.entries()].map(([label, items]) => ({ label, items }));
 });
 
-function projectChats(projectId: string): Chat[] {
-	return visibleChats.filter((chat) => chat.projectId === projectId);
+function isActive(href: string): boolean {
+	if (href === '/') return currentPath === '/';
+	return currentPath.startsWith(href);
 }
 </script>
 
 <svelte:window onclick={(e) => {
 	const target = e.target as HTMLElement;
-	if (modelPickerOpen && !target?.closest('.model-picker-wrap')) modelPickerOpen = false;
-	if (thinkingPickerOpen && !target?.closest('.thinking-picker-wrap')) thinkingPickerOpen = false;
+	void target;
 }} />
 
 <nav class="sidebar">
-	<!-- Header: close button -->
 	<div class="header">
-		<!-- Close sidebar -->
 		{#if onToggle}
 			<button class="toggle-btn" onclick={onToggle} title="Close sidebar" aria-label="Close sidebar">
 				<PanelLeftClose size={18} />
@@ -297,256 +212,167 @@ function projectChats(projectId: string): Chat[] {
 		<span>New chat</span>
 	</button>
 
-	<!-- Home link -->
-	<a class="home-link" href="/" aria-label="Dashboard">
+	<!-- Command Center -->
+	<a class="nav-link" href="/" class:active={isActive('/')} aria-label="Command Center">
 		<House size={15} />
-		<span>Dashboard</span>
+		<span>Command Center</span>
+		{#if !ollamaReachable}
+			<span class="status-dot offline" title="Ollama offline"></span>
+		{/if}
 	</a>
 
-	<!-- Thread list -->
 	<div class="threads">
-		<!-- Planning section -->
+		<!-- Operations section -->
 		<div class="section-head">
-			<a class="section-link" href="/planning">Planning</a>
-			<button class="section-chevron-btn" onclick={() => (planningOpen = !planningOpen)} aria-label={planningOpen ? 'Collapse planning' : 'Expand planning'}>
-				<ChevronDown size={12} class={!planningOpen ? 'section-chevron-collapsed' : ''} />
+			<span class="section-label">Operations</span>
+			<button class="section-chevron-btn" onclick={() => (opsOpen = !opsOpen)} aria-label={opsOpen ? 'Collapse operations' : 'Expand operations'}>
+				<ChevronDown size={12} class={!opsOpen ? 'section-chevron-collapsed' : ''} />
 			</button>
 		</div>
-		{#if planningOpen}
-			{#each visiblePlans as plan (plan.id)}
-				<a class="plan-row" href="/planning/{plan.id}" title={plan.name}>
-					<span class="plan-row-name">{plan.name}</span>
-				</a>
-			{:else}
-				<div class="empty-hint">No plans yet</div>
-			{/each}
-		{/if}
-
-		<!-- Projects section (requires a plan first) -->
-		<div class="section-head">
-			<a class="section-link" href="/projects">Projects</a>
-			<button class="section-chevron-btn" onclick={() => (projectsOpen = !projectsOpen)} aria-label={projectsOpen ? 'Collapse projects' : 'Expand projects'}>
-				<ChevronDown size={12} class={!projectsOpen ? 'section-chevron-collapsed' : ''} />
-			</button>
-		</div>
-		{#if projectsOpen}
-		{#each visibleProjects as project (project.id)}
-			<div class="project-row">
-				{#if renamingProjectFor === project.id}
-					<input
-						bind:this={projectRenameInput}
-						class="rename-input"
-						bind:value={projectRenameDraft}
-						onkeydown={(e) => onProjectRenameKey(e, project)}
-						onblur={() => commitProjectRename(project)}
-						aria-label="Rename project"
-					/>
-				{:else}
-					<button class="project-name" type="button" onclick={() => createNewChat(project.id)} title="New chat in {project.name}">
-						<Folder size={13} />
-						<span>{project.name}</span>
-					</button>
-					<DropdownMenu>
-						<DropdownMenuTrigger aria-label="Project actions">
-							<MoreHorizontal size={14} />
-						</DropdownMenuTrigger>
-						<DropdownMenuContent align="end">
-							<DropdownMenuItem onSelect={() => createNewChat(project.id)}>
-								<Plus size={13} />
-								<span>New chat</span>
-							</DropdownMenuItem>
-							<DropdownMenuItem onSelect={() => startProjectRename(project)}>
-								<Pencil size={13} />
-								<span>Rename project</span>
-							</DropdownMenuItem>
-							<DropdownMenuSeparator />
-							<DropdownMenuItem onSelect={() => archiveProject(project)}>
-								<Archive size={13} />
-								<span>Archive project</span>
-							</DropdownMenuItem>
-						</DropdownMenuContent>
-					</DropdownMenu>
+		{#if opsOpen}
+			<a class="nav-link" href="/intake" class:active={isActive('/intake')}>
+				<FolderSearch size={15} />
+				<span>Intake</span>
+			</a>
+			<a class="nav-link" href="/plans" class:active={isActive('/plans')}>
+				<MapIcon size={15} />
+				<span>Plans</span>
+				{#if visiblePlans.length > 0}
+					<span class="count-badge">{visiblePlans.length}</span>
 				{/if}
-			</div>
+			</a>
+			<a class="nav-link" href="/execution" class:active={isActive('/execution')}>
+				<ListChecks size={15} />
+				<span>Execution</span>
+			</a>
+			<a class="nav-link" href="/review" class:active={isActive('/review')}>
+				<ClipboardCheck size={15} />
+				<span>Review</span>
+			</a>
 
-			{#each projectChats(project.id) as chat (chat.id)}
-				<div class="row project-chat" class:active={chat.id === currentChatId}>
-					{#if renamingFor === chat.id}
-						<input
-							bind:this={renameInput}
-							class="rename-input"
-							bind:value={renameDraft}
-							onkeydown={(e) => onRenameKey(e, chat)}
-							onblur={() => commitRename(chat)}
-							aria-label="Rename chat"
-						/>
-					{:else}
-						<a
-							class="thread"
-							href={`/chats/${chat.id}`}
-							title={chat.title}
-							aria-current={chat.id === currentChatId ? 'page' : undefined}
-						>
-							<span class="thread-title">{chat.title}</span>
+			<!-- Active plans inline -->
+			{#if visiblePlans.length > 0}
+				<div class="plan-list">
+					{#each visiblePlans.slice(0, 8) as plan (plan.id)}
+						<a class="plan-row" href="/plans/{plan.id}" title={plan.name} class:active={currentPath === `/plans/${plan.id}`}>
+							<span class="plan-row-name">{plan.name}</span>
 						</a>
-						<DropdownMenu>
-							<DropdownMenuTrigger aria-label="Chat actions">
-								<MoreHorizontal size={14} />
-							</DropdownMenuTrigger>
-
-							<DropdownMenuContent align="end">
-								<DropdownMenuItem onSelect={() => startRename(chat)}>
-									<Pencil size={13} />
-									<span>Rename manually</span>
-								</DropdownMenuItem>
-
-								<DropdownMenuItem
-									disabled={aiRenamingFor === chat.id}
-									onSelect={() => aiRename(chat)}
-								>
-									<Sparkles size={13} class={aiRenamingFor === chat.id ? 'spin' : ''} />
-									<span>Rename with AI</span>
-								</DropdownMenuItem>
-
-								<DropdownMenuSub>
-									<DropdownMenuSubTrigger>
-										<MoveRight size={13} />
-										<span>Move to</span>
-									</DropdownMenuSubTrigger>
-									<DropdownMenuSubContent>
-										<DropdownMenuItem onSelect={() => moveChat(chat, null)}>
-											<span>Global</span>
-										</DropdownMenuItem>
-										{#each visibleProjects as target (target.id)}
-											<DropdownMenuItem
-												disabled={target.id === chat.projectId}
-												onSelect={() => moveChat(chat, target.id)}
-											>
-												<span>{target.name}</span>
-											</DropdownMenuItem>
-										{/each}
-									</DropdownMenuSubContent>
-								</DropdownMenuSub>
-
-								<DropdownMenuSeparator />
-
-								<DropdownMenuItem onSelect={() => archiveChat(chat)}>
-									<Archive size={13} />
-									<span>Archive</span>
-								</DropdownMenuItem>
-								<DropdownMenuItem variant="destructive" onSelect={() => deleteChat(chat)}>
-									<Trash2 size={13} />
-									<span>Delete</span>
-								</DropdownMenuItem>
-							</DropdownMenuContent>
-						</DropdownMenu>
-					{/if}
+					{/each}
 				</div>
-			{/each}
-		{/each}
+			{/if}
 		{/if}
 
-		<div class="section-head global-head">
-			<span>Global chats</span>
+		<!-- Workspace section -->
+		<div class="section-head">
+			<span class="section-label">Workspace</span>
+			<button class="section-chevron-btn" onclick={() => (workspaceOpen = !workspaceOpen)} aria-label={workspaceOpen ? 'Collapse workspace' : 'Expand workspace'}>
+				<ChevronDown size={12} class={!workspaceOpen ? 'section-chevron-collapsed' : ''} />
+			</button>
 		</div>
-		{#if session.chats.length === 0 && visibleProjects.length === 0 && !session.currentChatId}
-			<div class="skeletons">
-				{#each Array(6) as _}
-					<div class="skeleton-row">
-						<div class="skeleton-line"></div>
-						<div class="skeleton-line short"></div>
+		{#if workspaceOpen}
+			<a class="nav-link" href="/workspace-sync" class:active={isActive('/workspace-sync')}>
+				<RefreshCw size={15} />
+				<span>Workspace Sync</span>
+			</a>
+			<a class="nav-link" href="/projects" class:active={isActive('/projects')}>
+				<Folder size={15} />
+				<span>Projects</span>
+			</a>
+		{/if}
+
+		<!-- Chats section -->
+		<div class="section-head">
+			<span class="section-label">Chats</span>
+			<button class="section-chevron-btn" onclick={() => (chatsOpen = !chatsOpen)} aria-label={chatsOpen ? 'Collapse chats' : 'Expand chats'}>
+				<ChevronDown size={12} class={!chatsOpen ? 'section-chevron-collapsed' : ''} />
+			</button>
+		</div>
+		{#if chatsOpen}
+			{#if session.chats.length === 0 && !session.currentChatId}
+				<div class="empty-hint">No chats yet</div>
+			{/if}
+			{#each grouped as group (group.label)}
+				<div class="group-label">{group.label}</div>
+				{#each group.items as chat (chat.id)}
+					<div class="row" class:active={chat.id === currentChatId}>
+						{#if renamingFor === chat.id}
+							<input
+								bind:this={renameInput}
+								class="rename-input"
+								bind:value={renameDraft}
+								onkeydown={(e) => onRenameKey(e, chat)}
+								onblur={() => commitRename(chat)}
+								aria-label="Rename chat"
+							/>
+						{:else}
+							<a
+								class="thread"
+								href={`/chats/${chat.id}`}
+								title={chat.title}
+								aria-current={chat.id === currentChatId ? 'page' : undefined}
+							>
+								<span class="thread-title">{chat.title}</span>
+							</a>
+							<DropdownMenu>
+								<DropdownMenuTrigger aria-label="Chat actions">
+									<MoreHorizontal size={14} />
+								</DropdownMenuTrigger>
+								<DropdownMenuContent align="end">
+									<DropdownMenuItem onSelect={() => startRename(chat)}>
+										<Pencil size={13} />
+										<span>Rename manually</span>
+									</DropdownMenuItem>
+									<DropdownMenuItem
+										disabled={aiRenamingFor === chat.id}
+										onSelect={() => aiRename(chat)}
+									>
+										<Sparkles size={13} class={aiRenamingFor === chat.id ? 'spin' : ''} />
+										<span>Rename with AI</span>
+									</DropdownMenuItem>
+									<DropdownMenuSub>
+										<DropdownMenuSubTrigger>
+											<MoveRight size={13} />
+											<span>Move to</span>
+										</DropdownMenuSubTrigger>
+										<DropdownMenuSubContent>
+											<DropdownMenuItem
+												disabled={!chat.projectId}
+												onSelect={() => moveChat(chat, null)}
+											>
+												<span>Global</span>
+											</DropdownMenuItem>
+											{#each visibleProjects as project (project.id)}
+												<DropdownMenuItem onSelect={() => moveChat(chat, project.id)}>
+													<span>{project.name}</span>
+												</DropdownMenuItem>
+											{/each}
+										</DropdownMenuSubContent>
+									</DropdownMenuSub>
+									<DropdownMenuSeparator />
+									<DropdownMenuItem onSelect={() => archiveChat(chat)}>
+										<Archive size={13} />
+										<span>Archive</span>
+									</DropdownMenuItem>
+									<DropdownMenuItem variant="destructive" onSelect={() => deleteChat(chat)}>
+										<Trash2 size={13} />
+										<span>Delete</span>
+									</DropdownMenuItem>
+								</DropdownMenuContent>
+							</DropdownMenu>
+						{/if}
 					</div>
 				{/each}
-			</div>
-		{/if}
-		{#each grouped as group (group.label)}
-			<div class="group-label">{group.label}</div>
-			{#each group.items as chat (chat.id)}
-				<div class="row" class:active={chat.id === currentChatId}>
-					{#if renamingFor === chat.id}
-						<input
-							bind:this={renameInput}
-							class="rename-input"
-							bind:value={renameDraft}
-							onkeydown={(e) => onRenameKey(e, chat)}
-							onblur={() => commitRename(chat)}
-							aria-label="Rename chat"
-						/>
-					{:else}
-						<a
-							class="thread"
-							href={`/chats/${chat.id}`}
-							title={chat.title}
-							aria-current={chat.id === currentChatId ? 'page' : undefined}
-						>
-							<span class="thread-title">{chat.title}</span>
-						</a>
-						<DropdownMenu>
-							<DropdownMenuTrigger aria-label="Chat actions">
-								<MoreHorizontal size={14} />
-							</DropdownMenuTrigger>
-
-							<DropdownMenuContent align="end">
-								<DropdownMenuItem onSelect={() => startRename(chat)}>
-									<Pencil size={13} />
-									<span>Rename manually</span>
-								</DropdownMenuItem>
-
-								<DropdownMenuItem
-									disabled={aiRenamingFor === chat.id}
-									onSelect={() => aiRename(chat)}
-								>
-									<Sparkles size={13} class={aiRenamingFor === chat.id ? 'spin' : ''} />
-									<span>Rename with AI</span>
-								</DropdownMenuItem>
-
-								<DropdownMenuSub>
-									<DropdownMenuSubTrigger>
-										<MoveRight size={13} />
-										<span>Move to</span>
-									</DropdownMenuSubTrigger>
-									<DropdownMenuSubContent>
-										<DropdownMenuItem
-											disabled={!chat.projectId}
-											onSelect={() => moveChat(chat, null)}
-										>
-											<span>Global</span>
-										</DropdownMenuItem>
-										{#each visibleProjects as project (project.id)}
-											<DropdownMenuItem onSelect={() => moveChat(chat, project.id)}>
-												<span>{project.name}</span>
-											</DropdownMenuItem>
-										{/each}
-									</DropdownMenuSubContent>
-								</DropdownMenuSub>
-
-								<DropdownMenuSeparator />
-
-								<DropdownMenuItem onSelect={() => archiveChat(chat)}>
-									<Archive size={13} />
-									<span>Archive</span>
-								</DropdownMenuItem>
-								<DropdownMenuItem variant="destructive" onSelect={() => deleteChat(chat)}>
-									<Trash2 size={13} />
-									<span>Delete</span>
-								</DropdownMenuItem>
-							</DropdownMenuContent>
-						</DropdownMenu>
-					{/if}
-				</div>
+			{:else}
+				{#if session.chats.length > 0}
+					<div class="empty-hint">No global chats</div>
+				{/if}
 			{/each}
-		{:else}
-			<div class="empty-hint">No global chats</div>
-		{/each}
+		{/if}
 	</div>
 
 	<!-- Footer -->
 	<div class="footer">
-		<a class="footer-link" href="/intake">
-			<FolderSearch size={15} />
-			<span>Folder Intake</span>
-		</a>
-		<a class="footer-link" href="/settings">
+		<a class="footer-link" href="/settings" class:active={isActive('/settings')}>
 			<Settings size={15} />
 			<span>Settings</span>
 		</a>
@@ -562,7 +388,6 @@ function projectChats(projectId: string): Chat[] {
 	min-width: var(--sidebar-w);
 }
 
-/* ── Header ── */
 .header {
 	display: flex;
 	align-items: center;
@@ -572,102 +397,6 @@ function projectChats(projectId: string): Chat[] {
 	flex-shrink: 0;
 }
 
-/* Shared picker button — used by both model and thinking pickers */
-.model-picker-wrap,
-.thinking-picker-wrap {
-	position: relative;
-}
-
-.model-picker-wrap {
-	flex: 1;
-	min-width: 0;
-}
-
-.picker-btn {
-	display: inline-flex;
-	align-items: center;
-	gap: 4px;
-	width: 100%;
-	padding: 5px var(--sp-2);
-	border: 1px solid var(--border-subtle);
-	border-radius: var(--radius-sm);
-	background: transparent;
-	color: var(--text-primary);
-	font-size: 13px;
-	font-weight: 500;
-	font-family: inherit;
-	cursor: default;
-	white-space: nowrap;
-	overflow: hidden;
-	transition: background var(--motion-fast), border-color var(--motion-fast);
-}
-
-.picker-btn.has-options {
-	cursor: pointer;
-}
-
-.picker-btn.has-options:hover {
-	background: var(--bg-surface-hover);
-	border-color: var(--border-default);
-}
-
-.picker-label {
-	flex: 1;
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	text-align: left;
-}
-
-.picker-menu {
-	position: absolute;
-	top: calc(100% + 4px);
-	left: 0;
-	min-width: 100%;
-	max-height: 260px;
-	overflow-y: auto;
-	background: var(--bg-surface);
-	border: 1px solid var(--border-default);
-	border-radius: var(--radius-sm);
-	box-shadow: var(--shadow-md);
-	z-index: 100;
-	padding: 4px;
-}
-
-/* Thinking menu opens to the right edge so it doesn't clip */
-.picker-menu--right {
-	left: auto;
-	right: 0;
-}
-
-.menu-item {
-	display: block;
-	width: 100%;
-	text-align: left;
-	padding: 6px 10px;
-	border: none;
-	border-radius: 4px;
-	background: transparent;
-	font-size: 12px;
-	font-family: inherit;
-	color: var(--text-primary);
-	cursor: pointer;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-
-.menu-item:hover {
-	background: var(--bg-surface-hover);
-}
-
-.menu-item.active {
-	color: var(--accent-text);
-	font-weight: 600;
-}
-
-/* Sidebar toggle */
 .toggle-btn {
 	flex-shrink: 0;
 	display: grid;
@@ -679,9 +408,7 @@ function projectChats(projectId: string): Chat[] {
 	background: transparent;
 	color: var(--text-muted);
 	cursor: pointer;
-	transition:
-		color var(--motion-fast),
-		background var(--motion-fast);
+	transition: color var(--motion-fast), background var(--motion-fast);
 }
 
 .toggle-btn:hover {
@@ -689,7 +416,6 @@ function projectChats(projectId: string): Chat[] {
 	background: var(--bg-surface-hover);
 }
 
-/* ── New chat ── */
 .new-chat {
 	display: flex;
 	align-items: center;
@@ -704,16 +430,60 @@ function projectChats(projectId: string): Chat[] {
 	font-size: 13.5px;
 	font-weight: 500;
 	cursor: pointer;
-	transition:
-		color var(--motion-fast),
-		background var(--motion-fast),
-		border-color var(--motion-fast);
+	transition: color var(--motion-fast), background var(--motion-fast), border-color var(--motion-fast);
 }
 
 .new-chat:hover {
 	border-color: var(--border-strong);
 	background: var(--bg-surface);
 	color: var(--text-primary);
+}
+
+/* ── Nav links ── */
+.nav-link {
+	display: flex;
+	align-items: center;
+	gap: var(--sp-2);
+	padding: 7px var(--sp-2);
+	border-radius: var(--radius-sm);
+	color: var(--text-muted);
+	font-size: 13px;
+	font-weight: 500;
+	text-decoration: none;
+	transition: color var(--motion-fast), background var(--motion-fast);
+}
+
+.nav-link:hover {
+	background: var(--bg-surface-hover);
+	color: var(--text-primary);
+}
+
+.nav-link.active {
+	color: var(--text-primary);
+	background: var(--accent-soft);
+}
+
+.count-badge {
+	margin-left: auto;
+	font-size: 10px;
+	font-weight: 700;
+	color: var(--text-muted);
+	background: rgba(255, 255, 255, 0.06);
+	padding: 1px 6px;
+	border-radius: 999px;
+}
+
+.status-dot {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	margin-left: auto;
+	flex-shrink: 0;
+}
+
+.status-dot.offline {
+	background: #f87171;
+	box-shadow: 0 0 6px rgba(248, 113, 113, 0.5);
 }
 
 /* ── Threads ── */
@@ -738,38 +508,9 @@ function projectChats(projectId: string): Chat[] {
 	text-transform: uppercase;
 }
 
-.section-head button {
-	display: grid;
-	place-items: center;
-	width: 24px;
-	height: 24px;
-	border: none;
-	border-radius: var(--radius-sm);
-	background: transparent;
-	color: var(--text-muted);
-	cursor: pointer;
-}
-
-.section-head button:hover {
-	background: var(--bg-surface-hover);
-	color: var(--text-primary);
-}
-
-.section-link {
+.section-label {
 	flex: 1;
 	min-width: 0;
-	color: var(--text-muted);
-	font-size: 11px;
-	font-weight: 700;
-	letter-spacing: 0.04em;
-	text-transform: uppercase;
-	text-decoration: none;
-	padding: 2px 0;
-	transition: color var(--motion-fast);
-}
-
-.section-link:hover {
-	color: var(--text-secondary);
 }
 
 .section-chevron-btn {
@@ -799,74 +540,45 @@ function projectChats(projectId: string): Chat[] {
 	transform: rotate(-90deg);
 }
 
-.global-head {
-	margin-top: var(--sp-2);
+/* ── Plan rows ── */
+.plan-list {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	padding-left: var(--sp-2);
 }
 
-.project-row {
+.plan-row {
 	display: flex;
 	align-items: center;
-	gap: 2px;
+	gap: 8px;
+	padding: 4px var(--sp-3);
 	border-radius: var(--radius-sm);
-}
-
-.project-name {
-	display: flex;
-	align-items: center;
-	gap: var(--sp-2);
-	flex: 1;
+	color: var(--text-secondary);
+	text-decoration: none;
+	font-size: 12.5px;
+	transition: background var(--motion-fast), color var(--motion-fast);
 	min-width: 0;
-	padding: var(--sp-2);
-	border: none;
-	border-radius: var(--radius-sm);
-	background: transparent;
-	color: var(--text-primary);
-	font: inherit;
-	font-size: 13px;
-	font-weight: 650;
-	cursor: pointer;
-	text-align: left;
 }
 
-.project-name span {
+.plan-row:hover {
+	background: var(--bg-surface-hover);
+	color: var(--text-primary);
+}
+
+.plan-row.active {
+	color: var(--text-primary);
+	background: var(--accent-soft);
+}
+
+.plan-row-name {
+	flex: 1;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
-.project-name:hover {
-	background: var(--bg-surface-hover);
-}
-
-.project-row :global([data-slot='dropdown-menu-trigger']) {
-	flex-shrink: 0;
-	display: grid;
-	place-items: center;
-	width: 24px;
-	height: 24px;
-	margin-right: 2px;
-	border: none;
-	border-radius: var(--radius-sm);
-	background: transparent;
-	color: var(--text-muted);
-	cursor: pointer;
-	opacity: 0;
-	transition:
-		opacity var(--motion-fast),
-		background var(--motion-fast),
-		color var(--motion-fast);
-}
-
-.project-row:hover :global([data-slot='dropdown-menu-trigger']),
-.project-row :global([data-slot='dropdown-menu-trigger'][data-state='open']),
-.project-row :global([data-slot='dropdown-menu-trigger']:focus-visible) {
-	opacity: 1;
-}
-
-.project-chat {
-	padding-left: var(--sp-3);
-}
-
+/* ── Chat rows ── */
 .group-label {
 	padding: var(--sp-3) var(--sp-2) var(--sp-1);
 	color: var(--text-muted);
@@ -883,9 +595,7 @@ function projectChats(projectId: string): Chat[] {
 	color: var(--text-secondary);
 	font-size: 13px;
 	text-decoration: none;
-	transition:
-		background var(--motion-fast),
-		color var(--motion-fast);
+	transition: background var(--motion-fast), color var(--motion-fast);
 	min-width: 0;
 }
 
@@ -901,16 +611,20 @@ function projectChats(projectId: string): Chat[] {
 	gap: 2px;
 	border-radius: var(--radius-sm);
 }
+
 .row.active {
 	background: var(--accent-soft);
 	border-radius: var(--radius-sm);
 }
+
 .row.active .thread {
 	color: var(--text-primary);
 }
+
 .row.active .thread:hover {
 	background: transparent;
 }
+
 .row.active::before {
 	content: '';
 	position: absolute;
@@ -935,16 +649,15 @@ function projectChats(projectId: string): Chat[] {
 	color: var(--text-muted);
 	cursor: pointer;
 	opacity: 0;
-	transition:
-		opacity var(--motion-fast),
-		background var(--motion-fast),
-		color var(--motion-fast);
+	transition: opacity var(--motion-fast), background var(--motion-fast), color var(--motion-fast);
 }
+
 .row:hover :global([data-slot='dropdown-menu-trigger']),
 .row :global([data-slot='dropdown-menu-trigger'][data-state='open']),
 .row :global([data-slot='dropdown-menu-trigger']:focus-visible) {
 	opacity: 1;
 }
+
 .row :global([data-slot='dropdown-menu-trigger']:hover) {
 	background: var(--bg-surface-hover);
 	color: var(--text-primary);
@@ -959,9 +672,7 @@ function projectChats(projectId: string): Chat[] {
 }
 
 @keyframes bryon-spin {
-	to {
-		transform: rotate(360deg);
-	}
+	to { transform: rotate(360deg); }
 }
 
 .rename-input {
@@ -984,87 +695,10 @@ function projectChats(projectId: string): Chat[] {
 }
 
 .empty-hint {
-	padding: var(--sp-8) var(--sp-2);
+	padding: var(--sp-4) var(--sp-2);
 	color: var(--text-muted);
 	font-size: 13px;
 	text-align: center;
-}
-
-/* ── Plan rows ── */
-.plan-row {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	padding: 5px var(--sp-3);
-	border-radius: var(--radius-sm);
-	color: var(--text-secondary);
-	text-decoration: none;
-	font-size: 13px;
-	transition: background var(--motion-fast), color var(--motion-fast);
-	min-width: 0;
-}
-
-.plan-row:hover {
-	background: var(--bg-surface-hover);
-	color: var(--text-primary);
-}
-
-.plan-row-name {
-	flex: 1;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.skeletons {
-	display: flex;
-	flex-direction: column;
-	gap: var(--sp-2);
-	padding: var(--sp-2);
-}
-
-.skeleton-row {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-	padding: var(--sp-2);
-}
-
-.skeleton-line {
-	height: 12px;
-	background: var(--bg-surface-hover);
-	border-radius: 4px;
-	animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-.skeleton-line.short {
-	width: 60%;
-}
-
-@keyframes pulse {
-	0%, 100% { opacity: 1; }
-	50% { opacity: .5; }
-}
-
-/* ── Home link ── */
-.home-link {
-	display: flex;
-	align-items: center;
-	gap: var(--sp-2);
-	padding: var(--sp-2) var(--sp-2);
-	border-radius: var(--radius-sm);
-	color: var(--text-muted);
-	font-size: 13px;
-	text-decoration: none;
-	margin-bottom: var(--sp-1);
-	transition:
-		color var(--motion-fast),
-		background var(--motion-fast);
-}
-
-.home-link:hover {
-	background: var(--bg-surface-hover);
-	color: var(--text-primary);
 }
 
 /* ── Footer ── */
@@ -1078,22 +712,6 @@ function projectChats(projectId: string): Chat[] {
 	margin-top: var(--sp-2);
 }
 
-.status-row {
-	display: flex;
-	align-items: center;
-	gap: var(--sp-2);
-	padding: var(--sp-2);
-	color: var(--text-muted);
-	font-size: 12px;
-}
-
-.status-text {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	font-size: 12px;
-}
-
 .footer-link {
 	display: flex;
 	align-items: center;
@@ -1103,13 +721,16 @@ function projectChats(projectId: string): Chat[] {
 	color: var(--text-muted);
 	font-size: 13px;
 	text-decoration: none;
-	transition:
-		color var(--motion-fast),
-		background var(--motion-fast);
+	transition: color var(--motion-fast), background var(--motion-fast);
 }
 
 .footer-link:hover {
 	background: var(--bg-surface-hover);
 	color: var(--text-primary);
+}
+
+.footer-link.active {
+	color: var(--text-primary);
+	background: var(--accent-soft);
 }
 </style>

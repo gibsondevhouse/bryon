@@ -8,9 +8,10 @@
 
 	let { data } = $props();
 
-	let plan     = $state<Plan>(untrack(() => data.plan));
-	let tasks    = $state<Task[]>(untrack(() => data.tasks));
-	const projects = $derived(data.projects as Project[]);
+	// Page redirects to /plans/[id] server-side; this script never executes.
+	let plan     = $state<Plan>({} as Plan);
+	let tasks    = $state<Task[]>([]);
+	const projects = $derived([] as Project[]);
 
 	// ── Name editing ──────────────────────────────────────────────────────────
 	let editingName = $state(false);

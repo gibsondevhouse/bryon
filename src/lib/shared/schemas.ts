@@ -164,6 +164,207 @@ export const taskStatusSchema = z.enum([
 	'archived',
 ]);
 
+export const doctrineLifecycleSchema = z.enum([
+	'proposed',
+	'drafting',
+	'active',
+	'archived',
+]);
+
+export const opordStatusSchema = z.enum([
+	'draft',
+	'issued',
+	'superseded',
+	'archived',
+]);
+
+export const fragoStatusSchema = z.enum([
+	'draft',
+	'issued',
+	'applied',
+	'archived',
+]);
+
+export const aarStatusSchema = z.enum([
+	'draft',
+	'in_review',
+	'complete',
+	'archived',
+]);
+
+export const missionNeedPrioritySchema = z.enum([
+	'low',
+	'medium',
+	'high',
+	'critical',
+]);
+
+export const missionNeedSourceSchema = z.enum([
+	'folder_intake',
+	'manual_entry',
+	'chat_command',
+	'imported_document',
+]);
+
+export const taskSourceKindSchema = z.enum([
+	'manual',
+	'opord',
+	'frago',
+	'intake',
+	'expansion',
+]);
+
+export const lessonTargetKindSchema = z.enum([
+	'review',
+	'rule',
+	'standard',
+	'workflow',
+	'project',
+]);
+
+export const missionNeedSchema = z.object({
+	gap: z.string().nullable().default(null),
+	context: z.string().nullable().default(null),
+	priority: missionNeedPrioritySchema.nullable().default(null),
+	source: missionNeedSourceSchema.nullable().default(null),
+});
+
+export const commandersIntentSchema = z.object({
+	purpose: z.string().nullable().default(null),
+	keyTasks: z.array(z.string().min(1)).default([]),
+	endState: z.string().nullable().default(null),
+	constraints: z.array(z.string().min(1)).default([]),
+});
+
+export const oplanSchema = z.object({
+	missionStatement: z.string().nullable().default(null),
+	executionTimeline: z.array(z.string().min(1)).default([]),
+	taskOrganization: z.array(z.string().min(1)).default([]),
+	sustainment: z.array(z.string().min(1)).default([]),
+	annexes: z.array(z.string().min(1)).default([]),
+	references: z.array(z.string().min(1)).default([]),
+});
+
+export const planDoctrineSchema = z.object({
+	lifecycle: doctrineLifecycleSchema.nullable().default(null),
+	missionNeed: missionNeedSchema,
+	commandersIntent: commandersIntentSchema,
+	lineOfEffort: z.array(z.string().min(1)).default([]),
+	oplan: oplanSchema,
+});
+
+export const conopsDecisionPointSchema = z.object({
+	id: z.string().min(1),
+	label: z.string().min(1),
+	trigger: z.string().nullable().default(null),
+	branch: z.string().nullable().default(null),
+	notes: z.string().nullable().default(null),
+});
+
+export const conopsPhaseSchema = z.object({
+	id: z.string().min(1),
+	planId: z.string().min(1),
+	ordinal: z.number().int().nonnegative(),
+	name: z.string().min(1),
+	summary: z.string().nullable().default(null),
+	startEvent: z.string().nullable().default(null),
+	endEvent: z.string().nullable().default(null),
+	objectives: z.array(z.string().min(1)).default([]),
+	decisionPoints: z.array(conopsDecisionPointSchema).default([]),
+	branches: z.array(z.string().min(1)).default([]),
+	contingencies: z.array(z.string().min(1)).default([]),
+	archivedAt: z.number().int().nonnegative().nullable().default(null),
+	createdAt: z.number().int().nonnegative(),
+	updatedAt: z.number().int().nonnegative(),
+});
+
+export const opordParagraphsSchema = z.object({
+	situation: z.string().nullable().default(null),
+	mission: z.string().nullable().default(null),
+	execution: z.string().nullable().default(null),
+	sustainment: z.string().nullable().default(null),
+	commandAndSignal: z.string().nullable().default(null),
+});
+
+export const opordSchema = z.object({
+	id: z.string().min(1),
+	planId: z.string().min(1),
+	status: opordStatusSchema.default('draft'),
+	paragraphs: opordParagraphsSchema,
+	issuedAt: z.number().int().nonnegative().nullable().default(null),
+	pushedAt: z.number().int().nonnegative().nullable().default(null),
+	archivedAt: z.number().int().nonnegative().nullable().default(null),
+	createdAt: z.number().int().nonnegative(),
+	updatedAt: z.number().int().nonnegative(),
+});
+
+export const fragoTargetSchema = z.object({
+	kind: z.enum(['plan', 'phase', 'opord_paragraph', 'project', 'task', 'plan_card']),
+	id: z.string().min(1),
+	paragraph: z.string().nullable().default(null),
+	note: z.string().nullable().default(null),
+});
+
+export const fragoSchema = z.object({
+	id: z.string().min(1),
+	opordId: z.string().min(1),
+	status: fragoStatusSchema.default('draft'),
+	changeType: z.enum(['addition', 'modification', 'deletion']),
+	targets: z.array(fragoTargetSchema).default([]),
+	originalText: z.string().nullable().default(null),
+	amendedText: z.string().nullable().default(null),
+	reason: z.string().nullable().default(null),
+	effectiveAt: z.number().int().nonnegative().nullable().default(null),
+	issuedAt: z.number().int().nonnegative().nullable().default(null),
+	appliedAt: z.number().int().nonnegative().nullable().default(null),
+	acknowledgedAt: z.number().int().nonnegative().nullable().default(null),
+	archivedAt: z.number().int().nonnegative().nullable().default(null),
+	createdAt: z.number().int().nonnegative(),
+	updatedAt: z.number().int().nonnegative(),
+});
+
+export const fragoImpactSchema = z.object({
+	id: z.string().min(1),
+	fragoId: z.string().min(1),
+	entityKind: z.enum(['task', 'project', 'phase', 'plan_card', 'opord_paragraph']),
+	entityId: z.string().min(1),
+	impactKind: z.enum(['added', 'modified', 'deleted', 'flagged']),
+	createdAt: z.number().int().nonnegative(),
+});
+
+export const aarSchema = z.object({
+	id: z.string().min(1),
+	planId: z.string().min(1),
+	projectId: z.string().min(1).nullable().default(null),
+	opordId: z.string().min(1).nullable().default(null),
+	fragoId: z.string().min(1).nullable().default(null),
+	checkpointId: z.string().min(1).nullable().default(null),
+	status: aarStatusSchema.default('draft'),
+	whatHappened: z.string().nullable().default(null),
+	whatWasSupposedToHappen: z.string().nullable().default(null),
+	whatWentRight: z.string().nullable().default(null),
+	whatWentWrong: z.string().nullable().default(null),
+	recommendations: z.string().nullable().default(null),
+	relatedTaskIds: z.array(z.string().min(1)).default([]),
+	createdAt: z.number().int().nonnegative(),
+	updatedAt: z.number().int().nonnegative(),
+	completedAt: z.number().int().nonnegative().nullable().default(null),
+	archivedAt: z.number().int().nonnegative().nullable().default(null),
+});
+
+export const aarLessonSchema = z.object({
+	id: z.string().min(1),
+	aarId: z.string().min(1),
+	status: z.enum(['proposed', 'accepted', 'rejected']).default('proposed'),
+	proposedTargetKind: lessonTargetKindSchema.default('review'),
+	lesson: z.string().min(1),
+	evidence: z.array(z.string().min(1)).default([]),
+	acceptedAt: z.number().int().nonnegative().nullable().default(null),
+	rejectedAt: z.number().int().nonnegative().nullable().default(null),
+	createdAt: z.number().int().nonnegative(),
+	updatedAt: z.number().int().nonnegative(),
+});
+
 // ── Intake scans ──────────────────────────────────────────────────────────────
 
 export const intakeScanStatusSchema = z.enum([
@@ -239,6 +440,17 @@ export const taskSchema = z.object({
 	updatedAt:   z.number().int().nonnegative(),
 });
 
+export const taskTraceabilitySchema = z.object({
+	sourceKind: taskSourceKindSchema.default('manual'),
+	sourceKey: z.string().min(1).nullable().default(null),
+	sourceOpordId: z.string().min(1).nullable().default(null),
+	sourceOpordParagraph: z.string().min(1).nullable().default(null),
+	sourceFragoId: z.string().min(1).nullable().default(null),
+	phaseId: z.string().min(1).nullable().default(null),
+	pushBatchId: z.string().min(1).nullable().default(null),
+	sourceFingerprint: z.string().min(1).nullable().default(null),
+});
+
 export const planCardSeriesSchema = z.enum([
 	'100', '200', '300', '400', '500', '600', '700', '800', '900', '1000',
 ]);
@@ -257,6 +469,8 @@ export const planCardSchema = z.object({
 	updatedAt:     z.number().int().nonnegative(),
 });
 
+// Phase 101: status is canonical. Doctrine columns (doctrineLifecycle, missionNeed*,
+// intent*, oplan*, lineOfEffort) exist in DB; Phase 102 wires them via planDoctrineSchema.
 export const planSchema = z.object({
 	id: z.string().min(1),
 	name: z.string().min(1),
@@ -366,12 +580,27 @@ export const memorySettingsSchema = z.object({
 	never_suggest: z.string().default(defaultMemorySettings.never_suggest),
 });
 
+export const doctrineLabelModeSchema = z.enum([
+	'doctrine_only',
+	'doctrine_with_helper',
+	'plain_first',
+]);
+
+export const defaultAppearanceSettings = {
+	doctrine_label_mode: 'doctrine_with_helper',
+} as const;
+
+export const appearanceSettingsSchema = z.object({
+	doctrine_label_mode: doctrineLabelModeSchema.default(defaultAppearanceSettings.doctrine_label_mode),
+});
+
 export const settingsSchema = z.object({
 	app:        appSettingsSchema.default(defaultAppSettings),
 	llm:        llmSettingsSchema.default(defaultLLMSettings),
 	web_search: webSearchSettingsSchema.default(defaultWebSearchSettings),
 	memory:     memorySettingsSchema.default(defaultMemorySettings),
 	privacy:    privacySettingsSchema.default(defaultPrivacySettings),
+	appearance: appearanceSettingsSchema.default(defaultAppearanceSettings),
 });
 
 export const streamRequestSchema = z.object({

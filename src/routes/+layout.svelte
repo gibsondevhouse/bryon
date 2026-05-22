@@ -27,7 +27,8 @@ let hasViewportSynced = $state(false);
 
 const currentChatId = $derived(page.params?.id ?? null);
 const isFullBleed   = $derived(
-	page.url.pathname === '/planning' || page.url.pathname === '/projects'
+	page.url.pathname === '/planning' || page.url.pathname === '/projects' ||
+	page.url.pathname === '/plans' || page.url.pathname === '/execution'
 );
 
 $effect(() => {

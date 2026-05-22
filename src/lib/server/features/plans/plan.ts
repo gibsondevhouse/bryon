@@ -100,6 +100,7 @@ export class PlanService {
 	}
 }
 
+// Phase 101: Doctrine fields are not mapped. Phase 102 adds toPlanWithDoctrine().
 function toPlan(row: PlanRow): Plan {
 	return planSchema.parse({
 		id: row.id,

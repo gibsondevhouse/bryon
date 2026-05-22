@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { Plus, X, Upload, FileText, File, Image, Mic, Video, ClipboardPaste, Archive } from '@lucide/svelte';
 	import { fmtDate } from '$lib/utils';
@@ -16,7 +15,8 @@
 		{ id: 'maintenance', label: 'Maintenance' },
 	];
 
-	let plans = $state<Plan[]>(untrack(() => data.plans));
+	// Page redirects to /plans server-side; this script never executes.
+	let plans = $state<Plan[]>([]);
 
 	let draggingId     = $state<string | null>(null);
 	let dragOverColumn = $state<PlanStatus | null>(null);

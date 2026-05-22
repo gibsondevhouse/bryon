@@ -10,6 +10,7 @@ import { dirname, join } from 'node:path';
 import { parse } from 'smol-toml';
 import {
 	defaultAppSettings,
+	defaultAppearanceSettings,
 	defaultLLMParams,
 	defaultLLMSettings,
 	defaultMemorySettings,
@@ -133,6 +134,9 @@ never_suggest = ${tomlString(config.memory.never_suggest)}
 [privacy]
 tier3_enabled = ${config.privacy.tier3_enabled}
 require_remote_preview = ${config.privacy.require_remote_preview}
+
+[appearance]
+doctrine_label_mode = ${tomlString(config.appearance.doctrine_label_mode)}
 `;
 }
 
@@ -262,6 +266,11 @@ function applyEnvOverrides(config: Settings): Settings {
 				parseBoolean(process.env.BRYON_PRIVACY_REQUIRE_REMOTE_PREVIEW) ??
 				config.privacy.require_remote_preview ??
 				defaultPrivacySettings.require_remote_preview,
+		},
+		appearance: {
+			doctrine_label_mode:
+				config.appearance?.doctrine_label_mode ??
+				defaultAppearanceSettings.doctrine_label_mode,
 		},
 	});
 }
