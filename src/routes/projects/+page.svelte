@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { Plus, Folder, Archive, MessageSquare } from '@lucide/svelte';
 	import { session } from '$lib/features/streaming/session.svelte';
@@ -6,8 +7,8 @@
 
 	let { data } = $props();
 
-	let projects = $state<Project[]>(data.projects);
-	let chatCounts = $state<Record<string, number>>(data.chatCounts);
+	let projects = $state<Project[]>(untrack(() => data.projects));
+	let chatCounts = $state<Record<string, number>>(untrack(() => data.chatCounts));
 
 	// ── Create ────────────────────────────────────────────────────────────────
 	let creating = $state(false);
@@ -368,6 +369,7 @@
 	overflow: hidden;
 	display: -webkit-box;
 	-webkit-line-clamp: 2;
+	line-clamp: 2;
 	-webkit-box-orient: vertical;
 }
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { Plus, X, Upload, FileText, File, Image, Mic, Video, ClipboardPaste, Archive } from '@lucide/svelte';
 	import { Dialog, DialogContent, DialogTitle } from '$lib/ui/dialog';
@@ -14,7 +15,7 @@
 		{ id: 'maintenance', label: 'Maintenance' },
 	];
 
-	let plans = $state<Plan[]>(data.plans);
+	let plans = $state<Plan[]>(untrack(() => data.plans));
 
 	let draggingId     = $state<string | null>(null);
 	let dragOverColumn = $state<PlanStatus | null>(null);
@@ -338,7 +339,7 @@
 					<div class="source-types">
 						{#each SOURCE_TYPES as t (t.label)}
 							<span class="source-chip">
-								<svelte:component this={t.icon} size={11} />
+							<t.icon size={11} />
 								{t.label}
 							</span>
 						{/each}
@@ -936,16 +937,4 @@
 	cursor: not-allowed;
 }
 
-/* visually hidden radio inputs */
-.sr-only {
-	position: absolute;
-	width: 1px;
-	height: 1px;
-	padding: 0;
-	margin: -1px;
-	overflow: hidden;
-	clip: rect(0, 0, 0, 0);
-	white-space: nowrap;
-	border-width: 0;
-}
 </style>

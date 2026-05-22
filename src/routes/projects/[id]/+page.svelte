@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { goto } from '$app/navigation';
 	import {
 		ArrowLeft, Plus, Upload, Trash2, Brain, MessageSquare,
@@ -8,11 +9,11 @@
 
 	let { data } = $props();
 
-	let project  = $state<Project>(data.project);
-	let chats    = $state<Chat[]>(data.chats);
-	let files    = $state<ProjectFile[]>(data.files);
-	let memory   = $state<MemoryEntry[]>(data.memory);
-	const plans  = data.plans as Plan[];
+	let project  = $state<Project>(untrack(() => data.project));
+	let chats    = $state<Chat[]>(untrack(() => data.chats));
+	let files    = $state<ProjectFile[]>(untrack(() => data.files));
+	let memory   = $state<MemoryEntry[]>(untrack(() => data.memory));
+	const plans  = $derived(data.plans as Plan[]);
 
 	// ── Tabs ──────────────────────────────────────────────────────────────────
 	type Tab = 'chats' | 'files' | 'memory';
@@ -20,7 +21,7 @@
 
 	// ── Project rename ────────────────────────────────────────────────────────
 	let editingName = $state(false);
-	let nameDraft   = $state(project.name);
+	let nameDraft   = $state(untrack(() => project.name));
 	let nameInput: HTMLInputElement | undefined = $state();
 
 	function startRename(): void {
@@ -831,7 +832,7 @@
 	border-bottom: 1px solid var(--border-hair);
 }
 
-.file-list li:last-child .file-row {
+.file-list :global(li:last-child .file-row) {
 	border-bottom: none;
 }
 

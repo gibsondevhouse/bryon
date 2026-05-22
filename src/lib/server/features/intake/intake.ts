@@ -481,20 +481,20 @@ export class IntakeService {
 			const planName    = file.proposedPlanName    ?? 'Inbox';
 			const projectName = file.proposedProjectName ?? 'Uncategorised';
 
-			if (!planMap.has(planName)) {
-				const plan = planSvc.create({ name: planName, status: 'active' });
+			let plan = planMap.get(planName);
+			if (!plan) {
+				plan = planSvc.create({ name: planName, status: 'active' });
 				planMap.set(planName, plan);
 				createdPlans.push(plan);
 			}
-			const plan = planMap.get(planName)!;
 
 			const projKey = `${planName}::${projectName}`;
-			if (!projectMap.has(projKey)) {
-				const project = projectSvc.create({ name: projectName, planId: plan.id, status: 'planned' });
+			let project = projectMap.get(projKey);
+			if (!project) {
+				project = projectSvc.create({ name: projectName, planId: plan.id, status: 'planned' });
 				projectMap.set(projKey, project);
 				createdProjects.push(project);
 			}
-			const project = projectMap.get(projKey)!;
 
 			const task = taskSvc.create({
 				planId:    plan.id,

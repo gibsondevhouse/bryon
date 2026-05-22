@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { ArrowLeft, Plus, Trash2, Check, Archive, Folder } from '@lucide/svelte';
 	import type { Plan, PlanStatus, Project, Task } from '$lib/shared/types';
@@ -6,13 +7,13 @@
 
 	let { data } = $props();
 
-	let plan     = $state<Plan>(data.plan);
-	let tasks    = $state<Task[]>(data.tasks);
-	const projects = data.projects as Project[];
+	let plan     = $state<Plan>(untrack(() => data.plan));
+	let tasks    = $state<Task[]>(untrack(() => data.tasks));
+	const projects = $derived(data.projects as Project[]);
 
 	// ── Name editing ──────────────────────────────────────────────────────────
 	let editingName = $state(false);
-	let nameDraft   = $state(plan.name);
+	let nameDraft   = $state(untrack(() => plan.name));
 	let nameInput: HTMLInputElement | undefined = $state();
 
 	function startRename(): void {
@@ -39,10 +40,10 @@
 
 	// ── Meta editing ──────────────────────────────────────────────────────────
 	let editingMeta   = $state(false);
-	let summaryDraft  = $state(plan.summary ?? '');
-	let typeDraft     = $state(plan.planType ?? '');
-	let dateDraft     = $state(plan.startDate ?? '');
-	let projectDraft  = $state(plan.projectId ?? '');
+	let summaryDraft  = $state(untrack(() => plan.summary ?? ''));
+	let typeDraft     = $state(untrack(() => plan.planType ?? ''));
+	let dateDraft     = $state(untrack(() => plan.startDate ?? ''));
+	let projectDraft  = $state(untrack(() => plan.projectId ?? ''));
 
 	const linkedProject = $derived(projects.find((p) => p.id === plan.projectId) ?? null);
 
@@ -672,7 +673,7 @@
 	transition: opacity var(--motion-fast);
 }
 
-.task-list li:last-child .task-row { border-bottom: none; }
+.task-list :global(li:last-child .task-row) { border-bottom: none; }
 
 .task-row.is-done .task-body {
 	text-decoration: line-through;

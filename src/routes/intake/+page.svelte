@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onDestroy } from 'svelte';
+	import { onDestroy, untrack } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { FolderSearch, X, RefreshCw, Check, AlertCircle, Loader, FolderOpen } from '@lucide/svelte';
 	import type { IntakeScan, IntakeScanFileKind, Project } from '$lib/shared/types';
@@ -7,7 +7,7 @@
 	let { data } = $props();
 
 	// ── State ─────────────────────────────────────────────────────────────────
-	let scans = $state<IntakeScan[]>(data.scans);
+	let scans = $state<IntakeScan[]>(untrack(() => data.scans));
 	let folderPath = $state('');
 	let submitting = $state(false);
 	let inputError = $state<string | null>(null);
