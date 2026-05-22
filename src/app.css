@@ -86,7 +86,7 @@
 	/* Composer input dimensions (spec) */
 	--radius-input: 14px;
 
-	/* ── Obsidian Modernism: glass / glow / mesh / spring ── */
+	/* ── Obsidian Modernism: glass / glow / spring ── */
 	/* Frosted-glass surfaces */
 	--glass-bg: rgba(20, 21, 24, 0.55);
 	--glass-bg-strong: rgba(17, 18, 21, 0.72);
@@ -101,11 +101,6 @@
 		0 18px 50px -16px rgba(45, 127, 249, 0.4);
 	--glow-soft: 0 22px 60px -24px rgba(0, 0, 0, 0.7);
 	--halo: 0 0 0 3px rgba(45, 127, 249, 0.28);
-
-	/* Mesh-gradient stops (kept near-black so it stays barely perceptible) */
-	--mesh-1: rgba(45, 127, 249, 0.12);
-	--mesh-2: rgba(120, 80, 255, 0.07);
-	--mesh-3: rgba(20, 180, 160, 0.05);
 
 	/* Spring timings — slight overshoot, then settle */
 	--spring: 420ms cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -343,13 +338,6 @@ body {
 	border: 1px solid var(--glass-border);
 	-webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
 	backdrop-filter: blur(var(--glass-blur)) saturate(140%);
-}
-
-/* Animated mesh-gradient backdrop — drifts almost imperceptibly */
-@keyframes bryon-mesh-drift {
-	0%   { transform: translate3d(-2%, -1%, 0) scale(1.06); }
-	50%  { transform: translate3d(2%, 2%, 0) scale(1.14); }
-	100% { transform: translate3d(-2%, -1%, 0) scale(1.06); }
 }
 
 /* Staggered entrance — rise + settle with a spring */

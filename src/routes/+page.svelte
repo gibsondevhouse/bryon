@@ -81,8 +81,6 @@ const spotlight: Action<HTMLElement> = (node) => {
 </svelte:head>
 
 <div class="canvas">
-	<div class="mesh" aria-hidden="true"></div>
-
 	<div class="bento-grid">
 		<!-- Composer — the anchor -->
 		<section class="bento composer-tile glass" style:--idx={0} use:spotlight>
@@ -265,20 +263,6 @@ const spotlight: Action<HTMLElement> = (node) => {
 	display: grid;
 	place-items: center;
 	padding: var(--sp-6) var(--sp-4);
-}
-
-/* Imperceptible animated mesh backdrop */
-.mesh {
-	position: absolute;
-	inset: -8%;
-	z-index: 0;
-	pointer-events: none;
-	background:
-		radial-gradient(40% 50% at 18% 22%, var(--mesh-1), transparent 60%),
-		radial-gradient(38% 46% at 82% 28%, var(--mesh-2), transparent 60%),
-		radial-gradient(48% 56% at 50% 90%, var(--mesh-3), transparent 62%);
-	filter: blur(40px);
-	animation: bryon-mesh-drift 34s ease-in-out infinite;
 }
 
 .bento-grid {
