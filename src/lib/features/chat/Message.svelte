@@ -1,5 +1,6 @@
 <script lang="ts">
 import { RotateCcw } from '@lucide/svelte';
+import { fmtDate, fmtTime } from '$lib/utils';
 import type { Attachment, Message } from '$lib/shared/types';
 import type { NewsArticle } from '$lib/shared/stream-events';
 import MessageActions from './MessageActions.svelte';
@@ -56,15 +57,7 @@ const isCancelled = $derived(
 const timestamp = $derived.by(() => {
 	if (isStreaming || !message?.createdAt) return null;
 	const d = new Date(message.createdAt);
-	const time = d.toLocaleTimeString('en-US', {
-		hour: 'numeric',
-		minute: '2-digit',
-	});
-	const full = d.toLocaleString('en-US', {
-		dateStyle: 'medium',
-		timeStyle: 'short',
-	});
-	return { short: time, full };
+	return { short: fmtTime(d), full: `${fmtDate(d)} ${fmtTime(d)}` };
 });
 
 const attachments = $derived.by((): Attachment[] => {

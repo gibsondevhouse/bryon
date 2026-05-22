@@ -2,6 +2,7 @@
 import { goto, invalidateAll } from '$app/navigation';
 import { tick } from 'svelte';
 import { Plus, Settings, PanelLeftClose, MoreHorizontal, Pencil, Sparkles, Archive, Trash2, ChevronDown, Folder, MoveRight, FolderSearch, House } from '@lucide/svelte';
+import { fmtMonthYear } from '$lib/utils';
 import { session, type ThinkingMode } from '$lib/features/streaming/session.svelte';
 import {
 	DropdownMenu,
@@ -249,7 +250,7 @@ function relativeGroup(ts: number): string {
 
 	if (diffDays <= 7) return 'Previous 7 days';
 	if (diffDays <= 30) return 'Previous 30 days';
-	return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+	return fmtMonthYear(d);
 }
 
 type Group = { label: string; items: Chat[] };
@@ -280,72 +281,8 @@ function projectChats(projectId: string): Chat[] {
 }} />
 
 <nav class="sidebar">
-	<!-- Header: model picker + thinking picker + close -->
+	<!-- Header: close button -->
 	<div class="header">
-		<!-- Model picker -->
-		<div class="model-picker-wrap">
-			<button
-				class="picker-btn"
-				class:has-options={session.availableModels.length > 0}
-				onclick={toggleModelPicker}
-				aria-haspopup="listbox"
-				aria-expanded={modelPickerOpen}
-				title={session.availableModels.length > 0 ? 'Change model' : undefined}
-			>
-				<span class="picker-label">{activeModel}</span>
-				{#if session.availableModels.length > 0}
-					<ChevronDown size={11} />
-				{/if}
-			</button>
-
-			{#if modelPickerOpen}
-				<div class="picker-menu" role="listbox" aria-label="Select model">
-					{#each session.availableModels as m (m)}
-						<button
-							class="menu-item"
-							class:active={m === activeModel}
-							role="option"
-							aria-selected={m === activeModel}
-							onclick={() => selectModel(m)}
-						>
-							{m}
-						</button>
-					{/each}
-				</div>
-			{/if}
-		</div>
-
-		<!-- Thinking picker -->
-		<div class="thinking-picker-wrap">
-			<button
-				class="picker-btn has-options"
-				onclick={toggleThinkingPicker}
-				aria-haspopup="listbox"
-				aria-expanded={thinkingPickerOpen}
-				title="Change thinking depth"
-			>
-				<span class="picker-label">{activeThinkingLabel}</span>
-				<ChevronDown size={11} />
-			</button>
-
-			{#if thinkingPickerOpen}
-				<div class="picker-menu picker-menu--right" role="listbox" aria-label="Select thinking depth">
-					{#each thinkingOptions as opt (opt.value)}
-						<button
-							class="menu-item"
-							class:active={session.thinkingMode === opt.value}
-							role="option"
-							aria-selected={session.thinkingMode === opt.value}
-							onclick={() => selectThinkingMode(opt.value)}
-							title={opt.description}
-						>
-							{opt.label}
-						</button>
-					{/each}
-				</div>
-			{/if}
-		</div>
-
 		<!-- Close sidebar -->
 		{#if onToggle}
 			<button class="toggle-btn" onclick={onToggle} title="Close sidebar" aria-label="Close sidebar">
@@ -605,10 +542,6 @@ function projectChats(projectId: string): Chat[] {
 
 	<!-- Footer -->
 	<div class="footer">
-		<div class="status-row">
-			<span class="heartbeat" class:offline={!ollamaReachable}></span>
-			<span class="status-text">{ollamaReachable ? 'Ollama connected' : 'Ollama offline'}</span>
-		</div>
 		<a class="footer-link" href="/intake">
 			<FolderSearch size={15} />
 			<span>Folder Intake</span>
@@ -633,6 +566,7 @@ function projectChats(projectId: string): Chat[] {
 .header {
 	display: flex;
 	align-items: center;
+	justify-content: center;
 	gap: var(--sp-2);
 	padding: var(--sp-2) var(--sp-2) var(--sp-3);
 	flex-shrink: 0;

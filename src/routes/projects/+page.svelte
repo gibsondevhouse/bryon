@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { Plus, Folder, Archive, MessageSquare } from '@lucide/svelte';
 	import { session } from '$lib/features/streaming/session.svelte';
+	import { fmtDate } from '$lib/utils';
 	import type { Project } from '$lib/shared/types';
 
 	let { data } = $props();
@@ -71,9 +72,7 @@
 		in_progress: 'In Progress',
 	};
 
-	function formatDate(ts: number): string {
-		return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-	}
+	const formatDate = fmtDate;
 </script>
 
 <div class="shell">

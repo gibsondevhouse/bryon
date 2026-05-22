@@ -2,6 +2,7 @@
 	import { untrack } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { ArrowLeft, Plus, Trash2, Check, Archive, Folder } from '@lucide/svelte';
+	import { fmtDate } from '$lib/utils';
 	import type { Plan, PlanStatus, Project, Task } from '$lib/shared/types';
 	import { session } from '$lib/features/streaming/session.svelte';
 
@@ -164,7 +165,7 @@
 	function formatDate(s: string | null): string {
 		if (!s) return '';
 		const [y, m, d] = s.split('-').map(Number);
-		return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+		return fmtDate(new Date(y, m - 1, d));
 	}
 </script>
 

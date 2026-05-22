@@ -2,6 +2,7 @@
 import { goto } from '$app/navigation';
 import { ArrowUp, Paperclip, Globe, ArrowUpRight, MessageSquare, Folder, ListTodo, Activity, ExternalLink, Square } from '@lucide/svelte';
 import { session } from '$lib/features/streaming/session.svelte';
+import { fmtDateTime } from '$lib/utils';
 import type { PlanStatus } from '$lib/shared/types';
 import type { Action } from 'svelte/action';
 
@@ -21,6 +22,7 @@ let chatId = $state<string | null>(null);
 const canSend = $derived(value.trim().length > 0);
 const inlineMessages = $derived(chatId ? session.messages.filter((m) => m.role !== 'system') : []);
 const isStreaming = $derived(session.streaming && session.currentChatId === chatId);
+const isConnecting = $derived(isStreaming && !session.streamingContent);
 const hasInlineChat = $derived(inlineMessages.length > 0 || isStreaming);
 
 // Auto-scroll to bottom when new content arrives
@@ -59,14 +61,7 @@ function autosize(): void {
 	textarea.style.height = `${Math.min(textarea.scrollHeight, 220)}px`;
 }
 
-function formatDate(value: number): string {
-	return new Intl.DateTimeFormat('en-US', {
-		month: 'short',
-		day: 'numeric',
-		hour: 'numeric',
-		minute: '2-digit',
-	}).format(new Date(value));
-}
+const formatDate = fmtDateTime;
 
 function statusLabel(status: string): string {
 	return status.charAt(0).toUpperCase() + status.slice(1);
@@ -119,7 +114,11 @@ const spotlight: Action<HTMLElement> = (node) => {
 							<div class="msg msg-assistant">{msg.content ?? ''}</div>
 						{/if}
 					{/each}
-					{#if isStreaming && session.streamingContent}
+					{#if isConnecting}
+						<div class="msg msg-assistant typing-indicator" aria-label="Bryon is thinking">
+							<span></span><span></span><span></span>
+						</div>
+					{:else if isStreaming && session.streamingContent}
 						<div class="msg msg-assistant msg-streaming">{session.streamingContent}</div>
 					{/if}
 				</div>
@@ -207,19 +206,28 @@ const spotlight: Action<HTMLElement> = (node) => {
 		<!-- Runtime / status -->
 		<section class="bento runtime-tile glass" style:--idx={1} use:spotlight data-testid="home-runtime-panel">
 			<header class="tile-head">
-				<span class="tile-title"><Activity size={14} aria-hidden="true" /> Runtime</span>
+				<span class="tile-title"><Activity size={14} aria-hidden="true" /> Quick Actions</span>
+				<span class="status-dot" class:offline={!online} title={online ? 'Bryon is ready' : 'Ollama offline'}></span>
 			</header>
 
-			<div class="status-line">
-				<span class="heartbeat" class:offline={!online}></span>
-				<span>{online ? 'System online' : 'Ollama offline'}</span>
-			</div>
-
-			<dl class="runtime-meta">
-				<div><dt>Model</dt><dd>{data.settings.llm.model}</dd></div>
-				<div><dt>Ollama</dt><dd>{data.settings.llm.base_url}</dd></div>
-				<div><dt>Data</dt><dd>{data.settings.app.data_dir}</dd></div>
-			</dl>
+			<nav class="quick-actions">
+				<a href="/chats" class="qa-btn">
+					<MessageSquare size={16} aria-hidden="true" />
+					<span>New Chat</span>
+				</a>
+				<a href="/planning" class="qa-btn">
+					<ListTodo size={16} aria-hidden="true" />
+					<span>New Plan</span>
+				</a>
+				<a href="/intake" class="qa-btn">
+					<Folder size={16} aria-hidden="true" />
+					<span>Scan Folder</span>
+				</a>
+				<a href="/settings" class="qa-btn">
+					<Activity size={16} aria-hidden="true" />
+					<span>Settings</span>
+				</a>
+			</nav>
 		</section>
 
 		<!-- Recent conversations -->
@@ -367,7 +375,7 @@ const spotlight: Action<HTMLElement> = (node) => {
 	opacity: 1;
 }
 
-.composer-tile  { grid-area: composer; justify-content: space-between; min-height: 280px; }
+.composer-tile  { grid-area: composer; justify-content: space-between; min-height: 280px; max-height: 540px; }
 .composer-tile.has-chat { justify-content: flex-start; gap: var(--sp-3); }
 
 /* Compact brand when chat is active */
@@ -436,6 +444,30 @@ const spotlight: Action<HTMLElement> = (node) => {
 
 .msg-streaming {
 	opacity: 0.85;
+}
+
+.typing-indicator {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	padding: 4px 2px;
+}
+
+.typing-indicator span {
+	display: block;
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--text-muted);
+	animation: typing-bounce 1.2s ease-in-out infinite;
+}
+
+.typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+.typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typing-bounce {
+	0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+	30% { transform: translateY(-5px); opacity: 1; }
 }
 
 .send.stop {
@@ -691,45 +723,47 @@ a.tile-title:hover :global(.head-arrow) {
 	transform: translate(0, 0);
 }
 
-/* ── Runtime tile ── */
-.status-line {
-	display: flex;
-	align-items: center;
-	gap: var(--sp-2);
-	font-size: 13px;
-	color: var(--text-secondary);
+/* ── Quick Actions tile ── */
+.status-dot {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: #4ade80;
+	box-shadow: 0 0 6px rgba(74, 222, 128, 0.6);
+	flex: none;
 }
 
-.runtime-meta {
-	display: flex;
-	flex-direction: column;
-	gap: var(--sp-3);
-	margin: 0;
+.status-dot.offline {
+	background: #f87171;
+	box-shadow: 0 0 6px rgba(248, 113, 113, 0.5);
+}
+
+.quick-actions {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: var(--sp-2);
 	margin-top: auto;
 }
 
-.runtime-meta div {
+.qa-btn {
 	display: flex;
-	flex-direction: column;
-	gap: 2px;
-	min-width: 0;
-}
-
-.runtime-meta dt {
-	font-size: 10.5px;
-	font-weight: 500;
-	letter-spacing: 0.06em;
-	text-transform: uppercase;
-	color: var(--text-muted);
-}
-
-.runtime-meta dd {
-	margin: 0;
-	font-size: 12.5px;
+	align-items: center;
+	gap: 8px;
+	padding: 10px 14px;
+	border-radius: var(--radius-md, 12px);
+	background: rgba(255, 255, 255, 0.04);
+	border: 1px solid var(--border-hair, rgba(255,255,255,0.06));
 	color: var(--text-secondary);
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
+	text-decoration: none;
+	font-size: 13px;
+	font-weight: 500;
+	transition: background var(--motion-fast), color var(--motion-fast), border-color var(--motion-fast);
+}
+
+.qa-btn:hover {
+	background: rgba(255, 255, 255, 0.08);
+	color: var(--text-primary);
+	border-color: rgba(255, 255, 255, 0.12);
 }
 
 /* ── List tiles ── */

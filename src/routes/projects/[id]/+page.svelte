@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { goto } from '$app/navigation';
+	import { fmtDate } from '$lib/utils';
 	import {
 		ArrowLeft, Plus, Upload, Trash2, Brain, MessageSquare,
 		FileText, File, Image, ToggleLeft, ToggleRight, Loader, MapIcon,
@@ -82,9 +83,7 @@
 		}
 	}
 
-	function formatDate(ts: number): string {
-		return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-	}
+	const formatDate = fmtDate;
 
 	// ── Files tab ─────────────────────────────────────────────────────────────
 	let uploading   = $state(false);

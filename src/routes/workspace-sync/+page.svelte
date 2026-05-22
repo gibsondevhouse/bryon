@@ -2,6 +2,7 @@
 import { invalidateAll } from '$app/navigation';
 import { untrack } from 'svelte';
 import { CheckCircle2, FileWarning, GitCompare, RefreshCw, ShieldAlert } from '@lucide/svelte';
+import { fmtDateTime } from '$lib/utils';
 
 type Checkpoint = {
 	id: string;
@@ -109,14 +110,7 @@ function shortPath(path: string | null): string {
 	return parts.length > 4 ? `.../${parts.slice(-4).join('/')}` : path;
 }
 
-function formatDate(value: number): string {
-	return new Intl.DateTimeFormat('en-US', {
-		month: 'short',
-		day: 'numeric',
-		hour: 'numeric',
-		minute: '2-digit',
-	}).format(new Date(value));
-}
+const formatDate = fmtDateTime;
 
 async function readApiError(res: Response): Promise<string> {
 	try {

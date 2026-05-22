@@ -2,6 +2,7 @@
 	import { untrack } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { Plus, X, Upload, FileText, File, Image, Mic, Video, ClipboardPaste, Archive } from '@lucide/svelte';
+	import { fmtDate } from '$lib/utils';
 	import { Dialog, DialogContent, DialogTitle } from '$lib/ui/dialog';
 	import { session } from '$lib/features/streaming/session.svelte';
 	import type { Plan, PlanStatus } from '$lib/shared/types';
@@ -176,9 +177,7 @@
 		}
 	}
 
-	function formatDate(ts: number): string {
-		return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-	}
+	const formatDate = fmtDate;
 </script>
 
 <div class="shell">

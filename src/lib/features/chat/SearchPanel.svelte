@@ -3,6 +3,7 @@ import { goto } from '$app/navigation';
 import { tick } from 'svelte';
 import DOMPurify from 'dompurify';
 import { Search, X } from '@lucide/svelte';
+import { fmtDate } from '$lib/utils';
 import { Dialog, DialogContent, DialogTitle } from '$lib/ui/dialog';
 
 type SearchResult = {
@@ -107,12 +108,7 @@ function onKey(e: KeyboardEvent): void {
 	}
 }
 
-function formatDate(value: number): string {
-	return new Date(value).toLocaleDateString('en-US', {
-		month: 'short',
-		day: 'numeric',
-	});
-}
+const formatDate = fmtDate;
 
 function sanitizeSnippet(html: string): string {
 	return DOMPurify.sanitize(html, {
