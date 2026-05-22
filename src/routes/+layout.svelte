@@ -239,21 +239,28 @@ function onGlobalKey(e: KeyboardEvent): void {
 	grid-template-columns: var(--sidebar-w) minmax(0, 1fr) var(--activity-w);
 }
 
-/* ── Activity rail ── */
+/* ── Activity rail (tonal panel against the void) ── */
 .activity-rail {
+	position: relative;
+	z-index: 1;
 	overflow: hidden;
-	background: var(--bg-base);
+	background: var(--glass-bg);
+	border-left: 1px solid var(--border-hair);
 }
 
-/* ── Sidebar rail ── */
+/* ── Sidebar rail (tonal panel against the void) ── */
 .sidebar-rail {
+	position: relative;
+	z-index: 1;
 	overflow: hidden;
-	background: var(--bg-base);
+	background: var(--glass-bg);
+	border-right: 1px solid var(--border-hair);
 }
 
-/* ── Main ── */
+/* ── Main (stays opaque so inner routes keep crisp readability) ── */
 .main {
 	position: relative;
+	z-index: 1;
 	display: flex;
 	flex-direction: column;
 	min-width: 0;
