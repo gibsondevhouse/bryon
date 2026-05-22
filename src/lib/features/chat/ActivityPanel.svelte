@@ -130,8 +130,7 @@ function articleDomain(url: string): string {
 	flex-direction: column;
 	height: 100%;
 	min-height: 0;
-	background: var(--bg-sidebar, var(--bg-surface));
-	border-left: 1px solid var(--border-subtle);
+	background: transparent;
 	overflow: hidden;
 }
 

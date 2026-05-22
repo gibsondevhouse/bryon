@@ -1,7 +1,7 @@
 <script lang="ts">
 import { goto, invalidateAll } from '$app/navigation';
 import { tick } from 'svelte';
-import { Plus, Settings, PanelLeftClose, MoreHorizontal, Pencil, Sparkles, Archive, Trash2, ChevronDown, Folder, MoveRight, FolderSearch } from '@lucide/svelte';
+import { Plus, Settings, PanelLeftClose, MoreHorizontal, Pencil, Sparkles, Archive, Trash2, ChevronDown, Folder, MoveRight, FolderSearch, House } from '@lucide/svelte';
 import { session, type ThinkingMode } from '$lib/features/streaming/session.svelte';
 import {
 	DropdownMenu,
@@ -360,6 +360,12 @@ function projectChats(projectId: string): Chat[] {
 		<span>New chat</span>
 	</button>
 
+	<!-- Home link -->
+	<a class="home-link" href="/" aria-label="Dashboard">
+		<House size={15} />
+		<span>Dashboard</span>
+	</a>
+
 	<!-- Thread list -->
 	<div class="threads">
 		<!-- Planning section -->
@@ -600,7 +606,7 @@ function projectChats(projectId: string): Chat[] {
 	<!-- Footer -->
 	<div class="footer">
 		<div class="status-row">
-			<span class="dot" class:online={ollamaReachable} class:offline={!ollamaReachable}></span>
+			<span class="heartbeat" class:offline={!ollamaReachable}></span>
 			<span class="status-text">{ollamaReachable ? 'Ollama connected' : 'Ollama offline'}</span>
 		</div>
 		<a class="footer-link" href="/intake">
@@ -961,12 +967,25 @@ function projectChats(projectId: string): Chat[] {
 	gap: 2px;
 	border-radius: var(--radius-sm);
 }
+.row.active {
+	background: var(--accent-soft);
+	border-radius: var(--radius-sm);
+}
 .row.active .thread {
-	background: var(--bg-surface);
 	color: var(--text-primary);
 }
 .row.active .thread:hover {
-	background: var(--bg-surface-hover);
+	background: transparent;
+}
+.row.active::before {
+	content: '';
+	position: absolute;
+	left: 0;
+	top: 0;
+	bottom: 0;
+	width: 2px;
+	border-radius: 1px;
+	background: var(--accent);
 }
 
 .row :global([data-slot='dropdown-menu-trigger']) {
@@ -1093,6 +1112,27 @@ function projectChats(projectId: string): Chat[] {
 	50% { opacity: .5; }
 }
 
+/* ── Home link ── */
+.home-link {
+	display: flex;
+	align-items: center;
+	gap: var(--sp-2);
+	padding: var(--sp-2) var(--sp-2);
+	border-radius: var(--radius-sm);
+	color: var(--text-muted);
+	font-size: 13px;
+	text-decoration: none;
+	margin-bottom: var(--sp-1);
+	transition:
+		color var(--motion-fast),
+		background var(--motion-fast);
+}
+
+.home-link:hover {
+	background: var(--bg-surface-hover);
+	color: var(--text-primary);
+}
+
 /* ── Footer ── */
 .footer {
 	flex-shrink: 0;
@@ -1112,15 +1152,6 @@ function projectChats(projectId: string): Chat[] {
 	color: var(--text-muted);
 	font-size: 12px;
 }
-
-.dot {
-	width: 6px;
-	height: 6px;
-	border-radius: 50%;
-	flex-shrink: 0;
-}
-.dot.online { background: var(--green); }
-.dot.offline { background: var(--amber); }
 
 .status-text {
 	overflow: hidden;

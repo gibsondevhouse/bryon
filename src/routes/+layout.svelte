@@ -164,6 +164,8 @@ function onGlobalKey(e: KeyboardEvent): void {
 </svelte:head>
 
 <div class="app" class:sidebar-open={sidebarOpen} class:activity-open={session.activityPanelOpen}>
+	<div class="app-mesh" aria-hidden="true"></div>
+
 	<aside class="sidebar-rail">
 		<Sidebar
 			settings={data.settings}
@@ -239,21 +241,46 @@ function onGlobalKey(e: KeyboardEvent): void {
 	grid-template-columns: var(--sidebar-w) minmax(0, 1fr) var(--activity-w);
 }
 
-/* ── Activity rail ── */
+/* ── App-wide mesh backdrop (drifts imperceptibly behind the shell) ── */
+.app-mesh {
+	position: fixed;
+	inset: -8%;
+	z-index: 0;
+	pointer-events: none;
+	background:
+		radial-gradient(40% 50% at 16% 18%, var(--mesh-1), transparent 60%),
+		radial-gradient(40% 48% at 84% 22%, var(--mesh-2), transparent 60%),
+		radial-gradient(50% 56% at 50% 92%, var(--mesh-3), transparent 62%);
+	filter: blur(46px);
+	animation: bryon-mesh-drift 38s ease-in-out infinite;
+}
+
+/* ── Activity rail (frosted glass over the mesh) ── */
 .activity-rail {
+	position: relative;
+	z-index: 1;
 	overflow: hidden;
-	background: var(--bg-base);
+	background: var(--glass-bg);
+	-webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+	backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+	border-left: 1px solid var(--border-hair);
 }
 
-/* ── Sidebar rail ── */
+/* ── Sidebar rail (frosted glass over the mesh) ── */
 .sidebar-rail {
+	position: relative;
+	z-index: 1;
 	overflow: hidden;
-	background: var(--bg-base);
+	background: var(--glass-bg);
+	-webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+	backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+	border-right: 1px solid var(--border-hair);
 }
 
-/* ── Main ── */
+/* ── Main (stays opaque so inner routes keep crisp readability) ── */
 .main {
 	position: relative;
+	z-index: 1;
 	display: flex;
 	flex-direction: column;
 	min-width: 0;
