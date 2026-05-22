@@ -16,14 +16,19 @@ import type {
 	messageSchema,
 	memoryEntrySchema,
 	personaSchema,
+	planCardSchema,
+	planCardSeriesSchema,
 	planSchema,
 	planStatusSchema,
+	privacySettingsSchema,
 	projectFileSchema,
 	projectSchema,
+	projectStatusSchema,
 	promptPresetSchema,
 	settingsSchema,
 	streamRequestSchema,
 	taskSchema,
+	taskStatusSchema,
 	webSearchSettingsSchema,
 } from './schemas';
 
@@ -40,9 +45,13 @@ export type Persona = z.infer<typeof personaSchema>;
 export type Chat = z.infer<typeof chatSchema>;
 export type Message = z.infer<typeof messageSchema>;
 export type Task = z.infer<typeof taskSchema>;
+export type TaskStatus = z.infer<typeof taskStatusSchema>;
 export type Plan = z.infer<typeof planSchema>;
 export type PlanStatus = z.infer<typeof planStatusSchema>;
+export type PlanCard = z.infer<typeof planCardSchema>;
+export type PlanCardSeries = z.infer<typeof planCardSeriesSchema>;
 export type Project = z.infer<typeof projectSchema>;
+export type ProjectStatus = z.infer<typeof projectStatusSchema>;
 export type ProjectFile = z.infer<typeof projectFileSchema>;
 export type PromptPreset = z.infer<typeof promptPresetSchema>;
 export type MemoryEntry = z.infer<typeof memoryEntrySchema>;
@@ -50,6 +59,7 @@ export type AppSettings = z.infer<typeof appSettingsSchema>;
 export type LLMSettings = z.infer<typeof llmSettingsSchema>;
 export type WebSearchSettings = z.infer<typeof webSearchSettingsSchema>;
 export type MemorySettings = z.infer<typeof memorySettingsSchema>;
+export type PrivacySettings = z.infer<typeof privacySettingsSchema>;
 export type Settings = z.infer<typeof settingsSchema>;
 export type StreamRequest = z.infer<typeof streamRequestSchema>;
 

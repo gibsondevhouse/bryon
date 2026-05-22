@@ -66,6 +66,8 @@
 		definition:  'Definition',
 		execution:   'Execution',
 		maintenance: 'Maintenance',
+		planned:     'Planned',
+		in_progress: 'In Progress',
 	};
 
 	function formatDate(ts: number): string {

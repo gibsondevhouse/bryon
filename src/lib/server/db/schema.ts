@@ -75,8 +75,9 @@ export const projects = sqliteTable(
 		remember: text('remember').notNull().default(''),
 		neverSuggest: text('never_suggest').notNull().default(''),
 		status: text('status', {
-			enum: ['ideation', 'definition', 'execution', 'maintenance'],
+			enum: ['ideation', 'definition', 'execution', 'maintenance', 'planned', 'in_progress'],
 		}).notNull().default('ideation'),
+		planId: text('plan_id'),
 		archivedAt: integer('archived_at'),
 		createdAt: integer('created_at').notNull(),
 		updatedAt: integer('updated_at').notNull(),
@@ -227,10 +228,12 @@ export const messagesRelations = relations(messages, ({ one }) => ({
 	}),
 }));
 
-export const projectsRelations = relations(projects, ({ many }) => ({
+export const projectsRelations = relations(projects, ({ one, many }) => ({
 	chats: many(chats),
 	files: many(projectFiles),
 	memoryEntries: many(memoryEntries),
+	tasks: many(tasks),
+	plan: one(plans, { fields: [projects.planId], references: [plans.id] }),
 }));
 
 export const projectFilesRelations = relations(projectFiles, ({ one, many }) => ({
@@ -316,7 +319,7 @@ export const plans = sqliteTable(
 		planType:  text('plan_type'),
 		startDate: text('start_date'),
 		status:    text('status', {
-			enum: ['ideation', 'definition', 'execution', 'maintenance'],
+			enum: ['ideation', 'definition', 'execution', 'maintenance', 'drafting', 'active'],
 		}).notNull().default('ideation'),
 		projectId:  text('project_id').references(() => projects.id, { onDelete: 'set null' }),
 		archivedAt: integer('archived_at'),
@@ -333,22 +336,120 @@ export const plans = sqliteTable(
 export const tasks = sqliteTable(
 	'tasks',
 	{
-		id:        text('id').primaryKey(),
-		planId:    text('plan_id').notNull().references(() => plans.id, { onDelete: 'cascade' }),
-		body:      text('body').notNull(),
-		done:      integer('done').notNull().default(0),
-		createdAt: integer('created_at').notNull(),
-		updatedAt: integer('updated_at').notNull(),
+		id:          text('id').primaryKey(),
+		planId:      text('plan_id').notNull().references(() => plans.id, { onDelete: 'cascade' }),
+		body:        text('body').notNull().default(''),
+		done:        integer('done').notNull().default(0),
+		title:       text('title').notNull().default(''),
+		description: text('description'),
+		status:      text('status', {
+			enum: ['proposed', 'planned', 'in_progress', 'blocked', 'completed', 'archived'],
+		}).notNull().default('planned'),
+		projectId:   text('project_id').references(() => projects.id, { onDelete: 'set null' }),
+		assignee:    text('assignee'),
+		dueDate:     text('due_date'),
+		sortOrder:   integer('sort_order'),
+		createdAt:   integer('created_at').notNull(),
+		updatedAt:   integer('updated_at').notNull(),
 	},
 	(t) => [
 		index('idx_tasks_plan_id').on(t.planId, t.createdAt),
+		index('idx_tasks_project_id').on(t.projectId, t.status),
+	],
+);
+
+export const planCards = sqliteTable(
+	'plan_cards',
+	{
+		id:            text('id').primaryKey(),
+		planId:        text('plan_id').notNull().references(() => plans.id, { onDelete: 'cascade' }),
+		series:        text('series', {
+			enum: ['100', '200', '300', '400', '500', '600', '700', '800', '900', '1000'],
+		}).notNull().default('100'),
+		title:         text('title').notNull(),
+		body:          text('body'),
+		sortOrder:     integer('sort_order'),
+		locked:        integer('locked').notNull().default(0),
+		contextWeight: text('context_weight', {
+			enum: ['always', 'conditional', 'never'],
+		}).notNull().default('conditional'),
+		archivedAt:    integer('archived_at'),
+		createdAt:     integer('created_at').notNull(),
+		updatedAt:     integer('updated_at').notNull(),
+	},
+	(t) => [
+		index('idx_plan_cards_plan_id').on(t.planId, t.archivedAt),
+	],
+);
+
+export const routingLogs = sqliteTable(
+	'routing_logs',
+	{
+		id:             text('id').primaryKey(),
+		taskType:       text('task_type').notNull(),
+		tier:           integer('tier').notNull(),
+		model:          text('model').notNull(),
+		remote:         integer('remote').notNull(),
+		privacyDecision: text('privacy_decision').notNull(),
+		tokensIn:       integer('tokens_in'),
+		tokensOut:      integer('tokens_out'),
+		errorCode:      text('error_code'),
+		createdAt:      integer('created_at').notNull(),
+	},
+	(t) => [
+		index('idx_routing_logs_created_at').on(t.createdAt),
+	],
+);
+
+export const workspaceCheckpoints = sqliteTable(
+	'workspace_checkpoints',
+	{
+		id:           text('id').primaryKey(),
+		description:  text('description').notNull(),
+		path:         text('path').notNull(),
+		snapshotJson: text('snapshot_json').notNull(),
+		createdAt:    integer('created_at').notNull(),
+	},
+);
+
+export const syncAuditFindings = sqliteTable(
+	'sync_audit_findings',
+	{
+		id:           text('id').primaryKey(),
+		checkpointId: text('checkpoint_id').references(() => workspaceCheckpoints.id),
+		severity:     text('severity', { enum: ['info', 'warning', 'error'] }).notNull(),
+		code:         text('code').notNull(),
+		message:      text('message').notNull(),
+		path:         text('path'),
+		resolvedAt:   integer('resolved_at'),
+		createdAt:    integer('created_at').notNull(),
+	},
+	(t) => [
+		index('idx_sync_audit_findings_checkpoint').on(t.checkpointId, t.resolvedAt),
 	],
 );
 
 export const plansRelations = relations(plans, ({ many }) => ({
 	tasks: many(tasks),
+	cards: many(planCards),
 }));
 
 export const tasksRelations = relations(tasks, ({ one }) => ({
 	plan: one(plans, { fields: [tasks.planId], references: [plans.id] }),
+	project: one(projects, { fields: [tasks.projectId], references: [projects.id] }),
+}));
+
+export const planCardsRelations = relations(planCards, ({ one }) => ({
+	plan: one(plans, { fields: [planCards.planId], references: [plans.id] }),
+}));
+
+export const workspaceCheckpointsRelations = relations(workspaceCheckpoints, ({ many }) => ({
+	findings: many(syncAuditFindings),
+}));
+
+export const syncAuditFindingsRelations = relations(syncAuditFindings, ({ one }) => ({
+	checkpoint: one(workspaceCheckpoints, {
+		fields: [syncAuditFindings.checkpointId],
+		references: [workspaceCheckpoints.id],
+	}),
 }));

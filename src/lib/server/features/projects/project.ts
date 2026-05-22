@@ -29,6 +29,7 @@ type MemoryEntryRow = typeof memoryEntries.$inferSelect;
 
 export type ListProjectsInput = {
 	includeArchived?: boolean;
+	planId?: string;
 	limit?: number;
 	offset?: number;
 };
@@ -38,6 +39,8 @@ export type CreateProjectInput = {
 	name: string;
 	description?: string | null;
 	promptOverride?: string | null;
+	planId?: string | null;
+	status?: 'ideation' | 'definition' | 'execution' | 'maintenance' | 'planned' | 'in_progress';
 };
 
 export type UpdateProjectInput = Partial<
@@ -46,7 +49,8 @@ export type UpdateProjectInput = Partial<
 	memoryEnabled?: boolean;
 	remember?: string;
 	neverSuggest?: string;
-	status?: 'ideation' | 'definition' | 'execution' | 'maintenance';
+	status?: 'ideation' | 'definition' | 'execution' | 'maintenance' | 'planned' | 'in_progress';
+	planId?: string | null;
 	archived?: boolean;
 };
 
@@ -65,15 +69,18 @@ export class ProjectService {
 	list(input: ListProjectsInput = {}): Project[] {
 		const limit = normalizeLimit(input.limit, 50, 200);
 		const offset = Math.max(0, input.offset ?? 0);
+		const conditions = [];
+		if (!input.includeArchived) conditions.push(isNull(projects.archivedAt));
+		if (input.planId !== undefined) conditions.push(eq(projects.planId, input.planId));
 		const query = this.db
 			.select()
 			.from(projects)
 			.orderBy(desc(projects.updatedAt), desc(projects.createdAt))
 			.limit(limit)
 			.offset(offset);
-		const rows = input.includeArchived
-			? query.all()
-			: query.where(isNull(projects.archivedAt)).all();
+		const rows = conditions.length > 0
+			? query.where(and(...conditions)).all()
+			: query.all();
 		return rows.map(toProject);
 	}
 
@@ -93,7 +100,8 @@ export class ProjectService {
 			memoryEnabled: 1,
 			remember: '',
 			neverSuggest: '',
-			status: 'ideation',
+			status: input.status ?? 'ideation',
+			planId: input.planId ?? null,
 			archivedAt: null,
 			createdAt: now,
 			updatedAt: now,
@@ -135,6 +143,10 @@ export class ProjectService {
 		}
 		if (input.status !== undefined) {
 			values.status = input.status;
+			hasChanges = true;
+		}
+		if (input.planId !== undefined) {
+			values.planId = input.planId ?? null;
 			hasChanges = true;
 		}
 		if (input.archived !== undefined) {

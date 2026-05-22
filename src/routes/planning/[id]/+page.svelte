@@ -74,10 +74,11 @@
 	}
 
 	// ── Status cycling ────────────────────────────────────────────────────────
-	const STATUS_ORDER: PlanStatus[] = ['ideation', 'definition', 'execution', 'maintenance'];
+	const STATUS_ORDER: PlanStatus[] = ['ideation', 'definition', 'execution', 'maintenance', 'drafting', 'active'];
 	const STATUS_LABELS: Record<PlanStatus, string> = {
 		ideation: 'Ideation', definition: 'Definition',
 		execution: 'Execution', maintenance: 'Maintenance',
+		drafting: 'Drafting', active: 'Active',
 	};
 
 	async function cycleStatus(): Promise<void> {

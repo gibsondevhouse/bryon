@@ -14,6 +14,7 @@ export const defaultAppSettings = {
 	host: '127.0.0.1',
 	port: 5174,
 	data_dir: '~/.local/share/bryon',
+	workspace_dir: '.',
 } as const;
 
 export const defaultLLMSettings = {
@@ -21,8 +22,17 @@ export const defaultLLMSettings = {
 	base_url: 'http://127.0.0.1:11434',
 	model: 'gemma4:e4b',
 	vision_model: 'gemma4:e4b',
+	small_model: '',
+	large_model: '',
+	flash_model: '',
+	gemini_api: { enabled: false, model: '', api_key: '' },
 	thinking: 'normal' as 'off' | 'auto' | 'light' | 'normal' | 'extended',
 	params: defaultLLMParams,
+} as const;
+
+export const defaultPrivacySettings = {
+	tier3_enabled: false,
+	require_remote_preview: false,
 } as const;
 
 export const defaultWebSearchSettings = {
@@ -132,6 +142,26 @@ export const planStatusSchema = z.enum([
 	'definition',
 	'execution',
 	'maintenance',
+	'drafting',
+	'active',
+]);
+
+export const projectStatusSchema = z.enum([
+	'ideation',
+	'definition',
+	'execution',
+	'maintenance',
+	'planned',
+	'in_progress',
+]);
+
+export const taskStatusSchema = z.enum([
+	'proposed',
+	'planned',
+	'in_progress',
+	'blocked',
+	'completed',
+	'archived',
 ]);
 
 // ── Intake scans ──────────────────────────────────────────────────────────────
@@ -162,10 +192,16 @@ export const intakeScanFileKindSchema = z.enum([
 ]);
 
 export const intakeScanFileSchema = z.object({
-	path:      z.string().min(1),
-	size:      z.number().int().nonnegative(),
-	kind:      intakeScanFileKindSchema,
-	ext:       z.string(),
+	id:                  z.string().min(1),
+	path:                z.string().min(1),
+	size:                z.number().int().nonnegative(),
+	kind:                intakeScanFileKindSchema,
+	ext:                 z.string(),
+	sensitive:           z.boolean().default(false),
+	category:            z.string().default('other'),
+	reviewState:         z.enum(['pending', 'included', 'excluded']).default('pending'),
+	proposedPlanName:    z.string().nullable().default(null),
+	proposedProjectName: z.string().nullable().default(null),
 });
 
 export const intakeScanSchema = z.object({
@@ -177,6 +213,10 @@ export const intakeScanSchema = z.object({
 	filesClassified:  z.number().int().nonnegative(),
 	errorMessage:     z.string().nullable().default(null),
 	result:           z.array(intakeScanFileSchema).nullable().default(null),
+	progress:         z.object({
+		phase:   intakeScanPhaseSchema,
+		scanned: z.number().int().nonnegative(),
+	}).default({ phase: 'queued', scanned: 0 }),
 	createdAt:        z.number().int().nonnegative(),
 	updatedAt:        z.number().int().nonnegative(),
 	cancelledAt:      z.number().int().nonnegative().nullable().default(null),
@@ -184,12 +224,37 @@ export const intakeScanSchema = z.object({
 });
 
 export const taskSchema = z.object({
-	id: z.string().min(1),
-	planId: z.string().min(1),
-	body: z.string().min(1),
-	done: z.boolean().default(false),
-	createdAt: z.number().int().nonnegative(),
-	updatedAt: z.number().int().nonnegative(),
+	id:          z.string().min(1),
+	planId:      z.string().min(1),
+	body:        z.string().default(''),
+	done:        z.boolean().default(false),
+	title:       z.string().default(''),
+	description: z.string().nullable().default(null),
+	status:      taskStatusSchema.default('planned'),
+	projectId:   z.string().nullable().default(null),
+	assignee:    z.string().nullable().default(null),
+	dueDate:     z.string().nullable().default(null),
+	sortOrder:   z.number().int().nullable().default(null),
+	createdAt:   z.number().int().nonnegative(),
+	updatedAt:   z.number().int().nonnegative(),
+});
+
+export const planCardSeriesSchema = z.enum([
+	'100', '200', '300', '400', '500', '600', '700', '800', '900', '1000',
+]);
+
+export const planCardSchema = z.object({
+	id:            z.string().min(1),
+	planId:        z.string().min(1),
+	series:        planCardSeriesSchema.default('100'),
+	title:         z.string().min(1),
+	body:          z.string().nullable().default(null),
+	sortOrder:     z.number().int().nullable().default(null),
+	locked:        z.boolean().default(false),
+	contextWeight: z.enum(['always', 'conditional', 'never']).default('conditional'),
+	archivedAt:    z.number().int().nonnegative().nullable().default(null),
+	createdAt:     z.number().int().nonnegative(),
+	updatedAt:     z.number().int().nonnegative(),
 });
 
 export const planSchema = z.object({
@@ -206,17 +271,18 @@ export const planSchema = z.object({
 });
 
 export const projectSchema = z.object({
-	id: z.string().min(1),
-	name: z.string().min(1),
-	description: z.string().nullable().default(null),
+	id:             z.string().min(1),
+	name:           z.string().min(1),
+	description:    z.string().nullable().default(null),
 	promptOverride: z.string().nullable().default(null),
-	memoryEnabled: z.boolean().default(true),
-	remember: z.string().default(''),
-	neverSuggest: z.string().default(''),
-	status: planStatusSchema.default('ideation'),
-	archivedAt: z.number().int().nonnegative().nullable().default(null),
-	createdAt: z.number().int().nonnegative(),
-	updatedAt: z.number().int().nonnegative(),
+	memoryEnabled:  z.boolean().default(true),
+	remember:       z.string().default(''),
+	neverSuggest:   z.string().default(''),
+	status:         projectStatusSchema.default('ideation'),
+	planId:         z.string().nullable().default(null),
+	archivedAt:     z.number().int().nonnegative().nullable().default(null),
+	createdAt:      z.number().int().nonnegative(),
+	updatedAt:      z.number().int().nonnegative(),
 });
 
 export const projectFileSchema = z.object({
@@ -255,18 +321,32 @@ export const memoryEntrySchema = z.object({
 });
 
 export const appSettingsSchema = z.object({
-	host: z.string().min(1).default(defaultAppSettings.host),
-	port: z.number().int().positive().default(defaultAppSettings.port),
-	data_dir: z.string().min(1).default(defaultAppSettings.data_dir),
+	host:          z.string().min(1).default(defaultAppSettings.host),
+	port:          z.number().int().positive().default(defaultAppSettings.port),
+	data_dir:      z.string().min(1).default(defaultAppSettings.data_dir),
+	workspace_dir: z.string().default(defaultAppSettings.workspace_dir),
 });
 
 export const llmSettingsSchema = z.object({
-	backend: z.literal('ollama').default(defaultLLMSettings.backend),
-	base_url: z.string().min(1).default(defaultLLMSettings.base_url),
-	model: z.string().min(1).default(defaultLLMSettings.model),
+	backend:      z.literal('ollama').default(defaultLLMSettings.backend),
+	base_url:     z.string().min(1).default(defaultLLMSettings.base_url),
+	model:        z.string().min(1).default(defaultLLMSettings.model),
 	vision_model: z.string().min(1).default(defaultLLMSettings.vision_model),
-	thinking: z.enum(['off', 'auto', 'light', 'normal', 'extended']).default(defaultLLMSettings.thinking),
-	params: llmParamsSchema.default(defaultLLMParams),
+	small_model:  z.string().default(defaultLLMSettings.small_model),
+	large_model:  z.string().default(defaultLLMSettings.large_model),
+	flash_model:  z.string().default(defaultLLMSettings.flash_model),
+	gemini_api:   z.object({
+		enabled: z.boolean().default(false),
+		model:   z.string().default(''),
+		api_key: z.string().default(''),
+	}).default(defaultLLMSettings.gemini_api),
+	thinking:     z.enum(['off', 'auto', 'light', 'normal', 'extended']).default(defaultLLMSettings.thinking),
+	params:       llmParamsSchema.default(defaultLLMParams),
+});
+
+export const privacySettingsSchema = z.object({
+	tier3_enabled:         z.boolean().default(defaultPrivacySettings.tier3_enabled),
+	require_remote_preview: z.boolean().default(defaultPrivacySettings.require_remote_preview),
 });
 
 export const webSearchSettingsSchema = z.object({
@@ -287,10 +367,11 @@ export const memorySettingsSchema = z.object({
 });
 
 export const settingsSchema = z.object({
-	app: appSettingsSchema.default(defaultAppSettings),
-	llm: llmSettingsSchema.default(defaultLLMSettings),
+	app:        appSettingsSchema.default(defaultAppSettings),
+	llm:        llmSettingsSchema.default(defaultLLMSettings),
 	web_search: webSearchSettingsSchema.default(defaultWebSearchSettings),
-	memory: memorySettingsSchema.default(defaultMemorySettings),
+	memory:     memorySettingsSchema.default(defaultMemorySettings),
+	privacy:    privacySettingsSchema.default(defaultPrivacySettings),
 });
 
 export const streamRequestSchema = z.object({

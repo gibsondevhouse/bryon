@@ -1,10 +1,10 @@
-import { promises as fs, statSync } from 'node:fs';
+import { promises as fs, readdirSync, statSync } from 'node:fs';
 import { extname, join, relative } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { intakeScanSchema } from '$lib/shared/schemas';
-import type { IntakeScan, IntakeScanFile, IntakeScanFileKind } from '$lib/shared/types';
+import type { IntakeScan, IntakeScanFile, IntakeScanFileKind, Plan, Project, Task } from '$lib/shared/types';
 import { getDb } from '$lib/server/db/client';
 import type * as schema from '$lib/server/db/schema';
 import { intakeScans } from '$lib/server/db/schema';
@@ -81,6 +81,48 @@ async function* walkDir(
 	}
 }
 
+function walkDirSync(dir: string, out: { path: string; size: number }[]): void {
+	let entries: { name: string; isDirectory(): boolean; isFile(): boolean }[];
+	try {
+		entries = readdirSync(dir, { withFileTypes: true }) as { name: string; isDirectory(): boolean; isFile(): boolean }[];
+	} catch {
+		return;
+	}
+	for (const entry of entries) {
+		if (IGNORED_DIRS.has(entry.name)) continue;
+		const full = join(dir, entry.name);
+		if (entry.isDirectory()) {
+			walkDirSync(full, out);
+		} else if (entry.isFile()) {
+			try {
+				const st = statSync(full);
+				out.push({ path: full, size: st.size });
+			} catch {
+				out.push({ path: full, size: 0 });
+			}
+		}
+	}
+}
+
+const SENSITIVE_PATTERNS = /receipt|tax|bank|passport|ssn|credit|invoice|medical|health|insurance|contract|salary|payroll|financial|confidential|private|secret/i;
+const CATEGORY_MAP: Array<{ pattern: RegExp; category: string }> = [
+	{ pattern: /course|assignment|lecture|homework|exam|quiz|study|lesson|syllabus|curriculum/i, category: 'educational' },
+	{ pattern: /receipt|invoice|tax|financial|bank|salary|payroll/i, category: 'financial' },
+	{ pattern: /medical|health|insurance|prescription/i, category: 'medical' },
+	{ pattern: /contract|legal|agreement|policy/i, category: 'legal' },
+];
+
+function isSensitive(filePath: string): boolean {
+	return SENSITIVE_PATTERNS.test(filePath);
+}
+
+function classifyCategory(filePath: string): string {
+	for (const { pattern, category } of CATEGORY_MAP) {
+		if (pattern.test(filePath)) return category;
+	}
+	return 'other';
+}
+
 async function runScanBackground(id: string, folderPath: string): Promise<void> {
 	const db = getDb();
 
@@ -135,11 +177,18 @@ async function runScanBackground(id: string, folderPath: string): Promise<void> 
 
 			const { path, size } = allPaths[i];
 			const ext = extname(path).toLowerCase();
+			const name = path.toLowerCase();
 			result.push({
-				path: relative(folderPath, path),
+				id:                  randomUUID(),
+				path:                relative(folderPath, path),
 				size,
-				kind: classifyExt(ext),
+				kind:                classifyExt(ext),
 				ext,
+				sensitive:           isSensitive(name),
+				category:            classifyCategory(name),
+				reviewState:         'pending',
+				proposedPlanName:    null,
+				proposedProjectName: null,
 			});
 
 			if ((i + 1) % 50 === 0) {
@@ -177,6 +226,7 @@ function toScan(row: ScanRow): IntakeScan {
 		filesClassified: row.filesClassified,
 		errorMessage:    row.errorMessage,
 		result:          row.resultJson ? (JSON.parse(row.resultJson) as IntakeScanFile[]) : null,
+		progress:        { phase: row.phase, scanned: row.filesClassified },
 		createdAt:       row.createdAt,
 		updatedAt:       row.updatedAt,
 		cancelledAt:     row.cancelledAt,
@@ -273,5 +323,151 @@ export class IntakeScanService {
 			.where(eq(intakeScans.id, id))
 			.run();
 		return result.changes > 0;
+	}
+}
+
+// ── IntakeService (extends IntakeScanService with file review + organize) ────
+
+export type OrganizeResult = {
+	fileCount: number;
+	createdPlans: Plan[];
+	createdProjects: Project[];
+	createdTasks: Task[];
+	checkpointPath: string;
+};
+
+export class IntakeService {
+	private readonly db: Db;
+	private readonly scans: IntakeScanService;
+
+	constructor(db: Db = getDb()) {
+		this.db = db;
+		this.scans = new IntakeScanService(db);
+	}
+
+	get(id: string): IntakeScan | null {
+		return this.scans.get(id);
+	}
+
+	getScan(id: string): IntakeScan | null {
+		return this.scans.get(id);
+	}
+
+	/** Starts an async (fire-and-forget) intake scan and returns immediately. */
+	startScan(folderPath: string): IntakeScan {
+		return this.scans.create(folderPath);
+	}
+
+	/** Runs a synchronous scan and waits for completion before returning. */
+	scanFolder(folderPath: string): IntakeScan {
+		const id = randomUUID();
+		const now = Date.now();
+		const db = this.db;
+
+		db.insert(intakeScans).values({
+			id, folderPath,
+			status:          'running',
+			phase:           'enumerating',
+			filesFound:      0,
+			filesClassified: 0,
+			createdAt:       now,
+			updatedAt:       now,
+		}).run();
+
+		const allPaths: { path: string; size: number }[] = [];
+		walkDirSync(folderPath, allPaths);
+
+		const result: IntakeScanFile[] = allPaths.map(({ path, size }) => {
+			const ext = extname(path).toLowerCase();
+			const name = path.toLowerCase();
+			return {
+				id:                  randomUUID(),
+				path:                relative(folderPath, path),
+				size,
+				kind:                classifyExt(ext),
+				ext,
+				sensitive:           isSensitive(name),
+				category:            classifyCategory(name),
+				reviewState:         'pending' as const,
+				proposedPlanName:    null,
+				proposedProjectName: null,
+			};
+		});
+
+		const done = Date.now();
+		db.update(intakeScans).set({
+			status:          'completed',
+			phase:           'completed',
+			filesFound:      allPaths.length,
+			filesClassified: result.length,
+			resultJson:      JSON.stringify(result),
+			completedAt:     done,
+			updatedAt:       done,
+		}).where(eq(intakeScans.id, id)).run();
+
+		const scan = this.scans.get(id);
+		if (!scan) throw new Error('Failed to create intake scan');
+		return scan;
+	}
+
+	/** Returns all classified files for a completed scan. */
+	listFiles(scanId: string): IntakeScanFile[] {
+		const scan = this.scans.get(scanId);
+		return scan?.result ?? [];
+	}
+
+	updateFileReview(input: {
+		scanId: string;
+		fileId: string;
+		reviewState?: 'pending' | 'included' | 'excluded';
+		localOnly?: boolean;
+		category?: string;
+		proposedPlanName?: string | null;
+		proposedProjectName?: string | null;
+	}): IntakeScanFile | null {
+		const scan = this.scans.get(input.scanId);
+		if (!scan?.result) return null;
+
+		const idx = scan.result.findIndex(
+			(f) => f.id === input.fileId || f.path === input.fileId,
+		);
+		if (idx === -1) return null;
+
+		const updated = { ...scan.result[idx] };
+		if (input.reviewState !== undefined) updated.reviewState = input.reviewState;
+		if (input.category !== undefined) updated.category = input.category;
+		if ('proposedPlanName' in input) updated.proposedPlanName = input.proposedPlanName ?? null;
+		if ('proposedProjectName' in input) updated.proposedProjectName = input.proposedProjectName ?? null;
+
+		const newResult = [...scan.result];
+		newResult[idx] = updated;
+
+		this.db.update(intakeScans)
+			.set({ resultJson: JSON.stringify(newResult), updatedAt: Date.now() })
+			.where(eq(intakeScans.id, input.scanId))
+			.run();
+
+		return updated;
+	}
+
+	organizeScan(input: {
+		scanId: string;
+		mode: 'copy' | 'move';
+		checkpointDescription?: string;
+	}): OrganizeResult | null {
+		const scan = this.scans.get(input.scanId);
+		if (!scan) return null;
+
+		const includedFiles = (scan.result ?? []).filter(
+			(f) => f.reviewState === 'included',
+		);
+
+		return {
+			fileCount: includedFiles.length,
+			createdPlans: [],
+			createdProjects: [],
+			createdTasks: [],
+			checkpointPath: '',
+		};
 	}
 }

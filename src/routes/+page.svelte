@@ -56,7 +56,7 @@ function formatDate(value: number): string {
 	}).format(new Date(value));
 }
 
-function statusLabel(status: PlanStatus): string {
+function statusLabel(status: string): string {
 	return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
