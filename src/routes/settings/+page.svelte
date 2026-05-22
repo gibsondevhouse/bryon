@@ -1,12 +1,31 @@
 <script lang="ts">
 import { onMount } from 'svelte';
 import { untrack } from 'svelte';
-import { ArrowLeft, Save, CheckCircle2, XCircle, Globe, Brain, Eye, BookOpen, Plus, Trash2, Shield, Layers, Settings2 } from '@lucide/svelte';
+import {
+	ArrowLeft,
+	Save,
+	CheckCircle2,
+	XCircle,
+	Globe,
+	Brain,
+	Eye,
+	BookOpen,
+	Plus,
+	Trash2,
+	Shield,
+	Layers,
+	Settings2,
+} from '@lucide/svelte';
 import { Button } from '$lib/ui/button';
 import { Input } from '$lib/ui/input';
 import { session } from '$lib/features/streaming/session.svelte';
 import type { MemoryEntry, PromptPreset } from '$lib/shared/types';
 import type { DoctrineLabelMode } from '$lib/features/doctrine/labels';
+import {
+	BUILT_IN_LOCAL_ONLY_CATEGORIES,
+	LOCAL_ONLY_CATEGORY_LABELS,
+	normalizeRoutingCategory,
+} from '$lib/shared/routing';
 
 let { data } = $props();
 
@@ -16,6 +35,9 @@ let visionModel = $state(initial.llm.vision_model);
 let smallModel = $state(initial.llm.small_model);
 let largeModel = $state(initial.llm.large_model);
 let flashModel = $state(initial.llm.flash_model);
+let geminiEnabled = $state(initial.llm.gemini_api.enabled);
+let geminiModel = $state(initial.llm.gemini_api.model);
+let geminiApiKey = $state(initial.llm.gemini_api.api_key);
 let temperature = $state(initial.llm.params.temperature);
 let topP = $state(initial.llm.params.top_p);
 let topK = $state(initial.llm.params.top_k);
@@ -31,7 +53,13 @@ let remember = $state(initial.memory.remember);
 let neverSuggest = $state(initial.memory.never_suggest);
 let tier3Enabled = $state(initial.privacy.tier3_enabled);
 let requireRemotePreview = $state(initial.privacy.require_remote_preview);
-let labelMode = $state<DoctrineLabelMode>(initial.appearance?.doctrine_label_mode ?? 'doctrine_with_helper');
+let localOnlyCategories = $state<string[]>(
+	initial.privacy.local_only_categories ?? [],
+);
+let localOnlyDraft = $state('');
+let labelMode = $state<DoctrineLabelMode>(
+	initial.appearance?.doctrine_label_mode ?? 'doctrine_with_helper',
+);
 let saving = $state(false);
 let saved = $state(false);
 let saveError = $state<string | null>(null);
@@ -73,6 +101,11 @@ async function saveSettings(): Promise<void> {
 					small_model: smallModel,
 					large_model: largeModel,
 					flash_model: flashModel,
+					gemini_api: {
+						enabled: geminiEnabled,
+						model: geminiModel.trim(),
+						api_key: geminiApiKey,
+					},
 					thinking,
 					params: {
 						temperature: Number(temperature),
@@ -96,6 +129,7 @@ async function saveSettings(): Promise<void> {
 				privacy: {
 					tier3_enabled: tier3Enabled,
 					require_remote_preview: requireRemotePreview,
+					local_only_categories: localOnlyCategories,
 				},
 				appearance: {
 					doctrine_label_mode: labelMode,
@@ -104,7 +138,9 @@ async function saveSettings(): Promise<void> {
 		});
 		if (!response.ok) {
 			const body = await response.json().catch(() => null);
-			throw new Error(body?.error?.message ?? `Save failed (HTTP ${response.status}).`);
+			throw new Error(
+				body?.error?.message ?? `Save failed (HTTP ${response.status}).`,
+			);
 		}
 		saved = true;
 		setTimeout(() => {
@@ -127,13 +163,20 @@ async function testConnection(): Promise<void> {
 			models?: { missing?: Array<{ model: string; pullCommand: string }> };
 		};
 		if (!body.ollama) {
-			connection = { kind: 'fail', message: 'Ollama is not reachable. Start `ollama serve`.' };
+			connection = {
+				kind: 'fail',
+				message: 'Ollama is not reachable. Start `ollama serve`.',
+			};
 			return;
 		}
-		const missing = body.models?.missing?.map((entry) => entry.pullCommand) ?? [];
+		const missing =
+			body.models?.missing?.map((entry) => entry.pullCommand) ?? [];
 		connection = { kind: 'ok', missing };
 	} catch (error) {
-		connection = { kind: 'fail', message: (error as Error).message || 'Connection check failed.' };
+		connection = {
+			kind: 'fail',
+			message: (error as Error).message || 'Connection check failed.',
+		};
 	}
 }
 
@@ -175,7 +218,10 @@ async function createPreset(): Promise<void> {
 		const response = await fetch('/api/prompts/presets', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ name: presetName.trim(), body: presetBody.trim() }),
+			body: JSON.stringify({
+				name: presetName.trim(),
+				body: presetBody.trim(),
+			}),
 		});
 		if (!response.ok) return;
 		const payload = (await response.json()) as { preset: PromptPreset };
@@ -249,6 +295,35 @@ async function archiveMemoryEntry(entry: MemoryEntry): Promise<void> {
 	if (!response.ok) return;
 	memoryEntries = memoryEntries.filter((item) => item.id !== entry.id);
 }
+
+function addLocalOnlyCategory(): void {
+	const category = normalizeRoutingCategory(localOnlyDraft);
+	const builtIn = new Set<string>(BUILT_IN_LOCAL_ONLY_CATEGORIES);
+	if (
+		!category ||
+		builtIn.has(category) ||
+		localOnlyCategories.includes(category)
+	)
+		return;
+	localOnlyCategories = [...localOnlyCategories, category];
+	localOnlyDraft = '';
+}
+
+function removeLocalOnlyCategory(category: string): void {
+	localOnlyCategories = localOnlyCategories.filter((item) => item !== category);
+}
+
+function categoryLabel(category: string): string {
+	if (category in LOCAL_ONLY_CATEGORY_LABELS) {
+		return LOCAL_ONLY_CATEGORY_LABELS[
+			category as keyof typeof LOCAL_ONLY_CATEGORY_LABELS
+		];
+	}
+	return category
+		.split('_')
+		.map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+		.join(' ');
+}
 </script>
 
 <svelte:head>
@@ -295,25 +370,33 @@ async function archiveMemoryEntry(entry: MemoryEntry): Promise<void> {
 
 	<section class="card">
 		<div class="card-title"><Layers size={18} /> Model Tiers</div>
-		<p class="hint">Assign models to routing tiers. Tier 1 (Local) handles all sensitive categories. Tiers 2-4 expand to larger or remote models when privacy allows.</p>
+		<p class="hint">Assign models to routing tiers. Tiers 1-2 stay local. Tier 3 is remote-capable through Ollama Cloud. Tier 4 is optional direct Gemini and stays off unless configured.</p>
 		<div class="tier-grid">
 			<label>
-				<span>Tier 1 — Local default</span>
-				<Input bind:value={model} placeholder="gemma4:e4b" />
+				<span>Tier 1 — Local classification / light work</span>
+				<Input bind:value={smallModel} placeholder="Defaults to chat model" />
 			</label>
 			<label>
-				<span>Tier 2 — Small / fast</span>
-				<Input bind:value={smallModel} placeholder="e.g. gemma3:1b" />
+				<span>Tier 2 — Local heavier reasoning</span>
+				<Input bind:value={largeModel} placeholder="gemma4:31b" />
 			</label>
 			<label>
-				<span>Tier 3 — Large / slow</span>
-				<Input bind:value={largeModel} placeholder="e.g. gemma4:31b" />
+				<span>Tier 3 — Remote-capable Flash</span>
+				<Input bind:value={flashModel} placeholder="Optional Ollama Cloud model" />
 			</label>
 			<label>
-				<span>Tier 4 — Flash / batch</span>
-				<Input bind:value={flashModel} placeholder="Optional" />
+				<span>Tier 4 — Direct Gemini Pro</span>
+				<Input bind:value={geminiModel} placeholder="Optional direct Gemini model" />
 			</label>
 		</div>
+		<label class="check-row">
+			<input type="checkbox" bind:checked={geminiEnabled} />
+			<span>Enable Tier 4 direct Gemini when configured</span>
+		</label>
+		<label>
+			<span>Tier 4 API key</span>
+			<Input type="password" bind:value={geminiApiKey} placeholder="Stored locally in config.toml" />
+		</label>
 		<label>
 			<span>Thinking mode</span>
 			<select bind:value={thinking} aria-label="Thinking mode">
@@ -328,15 +411,55 @@ async function archiveMemoryEntry(entry: MemoryEntry): Promise<void> {
 
 	<section class="card">
 		<div class="card-title"><Shield size={18} /> Routing &amp; Privacy</div>
-		<p class="hint">Controls how Bryon routes requests across model tiers. Sensitive categories (medical, legal, financial, identity, credentials, minors, private correspondence) always stay on Tier 1 local.</p>
+		<p class="hint">Controls how Bryon routes requests across model tiers. Built-in and custom local-only categories deny remote tiers and stay on local models.</p>
 		<label class="check-row">
 			<input type="checkbox" bind:checked={tier3Enabled} />
-			<span>Enable Tier 3+ models (large/remote)</span>
+			<span>Enable Tier 3 remote-capable model</span>
 		</label>
 		<label class="check-row">
 			<input type="checkbox" bind:checked={requireRemotePreview} />
 			<span>Require preview before sending to remote models</span>
 		</label>
+		<div class="category-block">
+			<div>
+				<strong>Built-in local-only categories</strong>
+				<p class="hint">These categories cannot be removed.</p>
+			</div>
+			<div class="category-list">
+				{#each BUILT_IN_LOCAL_ONLY_CATEGORIES as category}
+					<span class="category-chip locked">{LOCAL_ONLY_CATEGORY_LABELS[category]}</span>
+				{/each}
+			</div>
+		</div>
+		<div class="category-block">
+			<div>
+				<strong>Custom local-only categories</strong>
+				<p class="hint">Use short category names such as client_files or export_controlled.</p>
+			</div>
+			<div class="category-form">
+				<Input bind:value={localOnlyDraft} placeholder="Add category" onkeydown={(e) => {
+					if (e.key === 'Enter') {
+						e.preventDefault();
+						addLocalOnlyCategory();
+					}
+				}} />
+				<Button type="button" variant="outline" onclick={addLocalOnlyCategory}>
+					<Plus size={16} /> Add
+				</Button>
+			</div>
+			<div class="category-list">
+				{#each localOnlyCategories as category}
+					<span class="category-chip">
+						{categoryLabel(category)}
+						<button type="button" onclick={() => removeLocalOnlyCategory(category)} aria-label="Remove {categoryLabel(category)}">
+							<Trash2 size={12} />
+						</button>
+					</span>
+				{:else}
+					<span class="hint">No custom categories.</span>
+				{/each}
+			</div>
+		</div>
 	</section>
 
 	<section class="card">
@@ -560,6 +683,72 @@ label {
 	gap: var(--sp-3);
 }
 
+.category-block {
+	display: grid;
+	gap: var(--sp-3);
+	padding: var(--sp-3);
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--radius-sm);
+	background: var(--bg-base);
+}
+
+.category-block strong {
+	display: block;
+	margin-bottom: var(--sp-1);
+	color: var(--text-primary);
+	font-size: 13px;
+}
+
+.category-form {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	gap: var(--sp-2);
+	align-items: center;
+}
+
+.category-list {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--sp-2);
+}
+
+.category-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--sp-2);
+	min-height: 28px;
+	padding: 4px 8px;
+	border: 1px solid var(--border-default);
+	border-radius: var(--radius-sm);
+	background: var(--bg-surface);
+	color: var(--text-primary);
+	font-size: 12px;
+	font-weight: 650;
+}
+
+.category-chip.locked {
+	background: color-mix(in srgb, var(--accent) 10%, var(--bg-surface));
+	color: var(--accent-text);
+}
+
+.category-chip button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	border: 0;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--text-muted);
+	cursor: pointer;
+}
+
+.category-chip button:hover {
+	background: var(--bg-surface-hover);
+	color: var(--text-primary);
+}
+
 textarea {
 	min-height: 120px;
 	resize: vertical;
@@ -664,6 +853,8 @@ select {
 @media (max-width: 760px) {
 	.settings-page { padding: var(--sp-4); }
 	.grid { grid-template-columns: 1fr; }
+	.tier-grid,
+	.category-form { grid-template-columns: 1fr; }
 	.memory-form,
 	.item-row { grid-template-columns: 1fr; }
 }

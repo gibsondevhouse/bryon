@@ -6,17 +6,17 @@ import { fmtDate } from '$lib/utils';
 import { Dialog, DialogContent, DialogTitle } from '$lib/ui/dialog';
 import { session } from '$lib/features/streaming/session.svelte';
 import DoctrineStatusBadge from '$lib/features/doctrine/DoctrineStatusBadge.svelte';
-import type { Plan, PlanStatus } from '$lib/shared/types';
+import type { DoctrineLifecycle, Plan } from '$lib/shared/types';
 
 let { data } = $props();
 
-type DoctrineColumn = { id: string; label: string; statuses: PlanStatus[] };
+type DoctrineColumn = { id: DoctrineLifecycle; label: string };
 
 const COLUMNS: DoctrineColumn[] = [
-	{ id: 'proposed',  label: 'Proposed',  statuses: ['ideation'] },
-	{ id: 'drafting',  label: 'Drafting',  statuses: ['definition', 'drafting'] },
-	{ id: 'active',    label: 'Active',    statuses: ['execution', 'active'] },
-	{ id: 'archived',  label: 'Archived',  statuses: ['maintenance'] },
+	{ id: 'proposed', label: 'Proposed' },
+	{ id: 'drafting', label: 'Drafting' },
+	{ id: 'active', label: 'Active' },
+	{ id: 'archived', label: 'Archived' },
 ];
 
 let plans = $state<Plan[]>(untrack(() => data.plans));
@@ -73,24 +73,7 @@ async function submitPlan(e: SubmitEvent): Promise<void> {
 }
 
 function columnPlans(col: DoctrineColumn): Plan[] {
-	return plans.filter((p) => col.statuses.includes(p.status));
-}
-
-function doctrineLifecycleFor(status: PlanStatus): string {
-	for (const col of COLUMNS) {
-		if (col.statuses.includes(status)) return col.id;
-	}
-	return 'proposed';
-}
-
-function targetStatusFor(colId: string): PlanStatus {
-	switch (colId) {
-		case 'proposed': return 'ideation';
-		case 'drafting': return 'drafting';
-		case 'active': return 'active';
-		case 'archived': return 'maintenance';
-		default: return 'ideation';
-	}
+	return plans.filter((p) => p.doctrineLifecycle === col.id);
 }
 
 function onDragStart(e: DragEvent, plan: Plan): void {
@@ -122,13 +105,15 @@ async function onColumnDrop(e: DragEvent, colId: string): Promise<void> {
 	const id = e.dataTransfer?.getData('text/plain');
 	if (!id) return;
 	const plan = plans.find((p) => p.id === id);
-	const targetStatus = targetStatusFor(colId);
-	if (!plan || plan.status === targetStatus) {
+	const targetLifecycle = colId as DoctrineLifecycle;
+	if (!plan || plan.doctrineLifecycle === targetLifecycle) {
 		draggingId = null;
 		dragOverColumn = null;
 		return;
 	}
-	plans = plans.map((p) => (p.id === id ? { ...p, status: targetStatus } : p));
+	plans = plans.map((p) =>
+		p.id === id ? { ...p, doctrineLifecycle: targetLifecycle } : p,
+	);
 	draggingId = null;
 	dragOverColumn = null;
 
@@ -136,16 +121,16 @@ async function onColumnDrop(e: DragEvent, colId: string): Promise<void> {
 		const res = await fetch(`/api/plans/${id}`, {
 			method: 'PATCH',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ status: targetStatus }),
+			body: JSON.stringify({ doctrineLifecycle: targetLifecycle }),
 		});
 		if (!res.ok) {
-			plans = plans.map((p) => (p.id === id ? { ...p, status: plan.status } : p));
+			plans = plans.map((p) => (p.id === id ? plan : p));
 		} else {
 			const { plan: updated } = await res.json();
 			plans = plans.map((p) => (p.id === id ? updated : p));
 		}
 	} catch {
-		plans = plans.map((p) => (p.id === id ? { ...p, status: plan.status } : p));
+		plans = plans.map((p) => (p.id === id ? plan : p));
 		session.plans = plans;
 	}
 }
@@ -160,7 +145,9 @@ function onDragStartWrapped(e: DragEvent, plan: Plan): void {
 function onDragEndWrapped(): void {
 	justDragged = true;
 	onDragEnd();
-	setTimeout(() => { justDragged = false; }, 150);
+	setTimeout(() => {
+		justDragged = false;
+	}, 150);
 }
 
 function onCardClick(plan: Plan): void {
@@ -235,7 +222,7 @@ const formatDate = fmtDate;
 								</button>
 							</div>
 							<div class="card-meta">
-								<DoctrineStatusBadge kind="plan" status={doctrineLifecycleFor(plan.status)} />
+								<DoctrineStatusBadge kind="plan" status={plan.doctrineLifecycle} />
 								<span class="plan-date">{formatDate(plan.updatedAt)}</span>
 							</div>
 						</div>

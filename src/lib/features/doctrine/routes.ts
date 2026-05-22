@@ -12,8 +12,4 @@ export const doctrineRoutes = {
 	settings: '/settings',
 	projects: '/projects',
 	projectDetail: (id: string) => `/projects/${id}`,
-
-	// Legacy redirects
-	legacyPlanning: '/planning',
-	legacyPlanDetail: (id: string) => `/planning/${id}`,
 } as const;

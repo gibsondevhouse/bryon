@@ -134,6 +134,7 @@ never_suggest = ${tomlString(config.memory.never_suggest)}
 [privacy]
 tier3_enabled = ${config.privacy.tier3_enabled}
 require_remote_preview = ${config.privacy.require_remote_preview}
+local_only_categories = ${tomlStringArray(config.privacy.local_only_categories)}
 
 [appearance]
 doctrine_label_mode = ${tomlString(config.appearance.doctrine_label_mode)}
@@ -266,6 +267,9 @@ function applyEnvOverrides(config: Settings): Settings {
 				parseBoolean(process.env.BRYON_PRIVACY_REQUIRE_REMOTE_PREVIEW) ??
 				config.privacy.require_remote_preview ??
 				defaultPrivacySettings.require_remote_preview,
+			local_only_categories:
+				config.privacy.local_only_categories ??
+				defaultPrivacySettings.local_only_categories,
 		},
 		appearance: {
 			doctrine_label_mode:
@@ -298,13 +302,18 @@ function tomlString(value: string): string {
 	return JSON.stringify(value);
 }
 
+function tomlStringArray(values: readonly string[]): string {
+	return `[${values.map(tomlString).join(', ')}]`;
+}
+
 /**
  * Bryon v1 is locked to the Gemma 4 family. If config or env vars point at
  * anything else, log a warning and substitute the default Gemma 4 tag so the
  * app stays usable instead of failing closed at boot.
  */
 function enforceGemma4(config: Settings): Settings {
-	const warnings: Array<{ field: string; value: string; replacement: string }> = [];
+	const warnings: Array<{ field: string; value: string; replacement: string }> =
+		[];
 
 	if (!isGemma4(config.llm.model)) {
 		warnings.push({

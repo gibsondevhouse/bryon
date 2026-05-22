@@ -1,8 +1,15 @@
 <script lang="ts">
 import { invalidateAll } from '$app/navigation';
 import { untrack } from 'svelte';
-import { CheckCircle2, FileWarning, GitCompare, RefreshCw, ShieldAlert } from '@lucide/svelte';
+import {
+	CheckCircle2,
+	FileWarning,
+	GitCompare,
+	RefreshCw,
+	ShieldAlert,
+} from '@lucide/svelte';
 import { fmtDateTime } from '$lib/utils';
+import RoutingDecisionSummary from '$lib/features/doctrine/RoutingDecisionSummary.svelte';
 
 type Checkpoint = {
 	id: string;
@@ -49,11 +56,15 @@ let description = $state('Manual checkpoint');
 let busy = $state(false);
 let errorMessage = $state<string | null>(null);
 
-const staleCount = $derived(changedFiles.filter((file) => file.status !== 'current').length);
+const staleCount = $derived(
+	changedFiles.filter((file) => file.status !== 'current').length,
+);
 const remoteCount = $derived(routingLogs.filter((log) => log.remote).length);
 
 async function syncWorkspace(): Promise<void> {
-	await postAction('/api/workspace-sync/sync', { description: description.trim() || 'Workspace sync' });
+	await postAction('/api/workspace-sync/sync', {
+		description: description.trim() || 'Workspace sync',
+	});
 }
 
 async function createCheckpoint(): Promise<void> {
@@ -66,7 +77,10 @@ async function runAudit(): Promise<void> {
 	await postAction('/api/workspace-sync/audit', {});
 }
 
-async function postAction(url: string, body: Record<string, unknown>): Promise<void> {
+async function postAction(
+	url: string,
+	body: Record<string, unknown>,
+): Promise<void> {
 	if (busy) return;
 	busy = true;
 	errorMessage = null;
@@ -92,7 +106,10 @@ async function refreshData(): Promise<void> {
 		fetch('/api/workspace-sync/audit'),
 		fetch('/api/workspace-sync/routing-logs?limit=50'),
 	]);
-	if (checkpointRes.ok) checkpoints = ((await checkpointRes.json()) as { checkpoints: Checkpoint[] }).checkpoints;
+	if (checkpointRes.ok)
+		checkpoints = (
+			(await checkpointRes.json()) as { checkpoints: Checkpoint[] }
+		).checkpoints;
 	if (auditRes.ok) {
 		const auditBody = (await auditRes.json()) as {
 			findings: Finding[];
@@ -101,7 +118,8 @@ async function refreshData(): Promise<void> {
 		findings = auditBody.findings;
 		changedFiles = auditBody.changedFiles;
 	}
-	if (routeRes.ok) routingLogs = ((await routeRes.json()) as { logs: RoutingLog[] }).logs;
+	if (routeRes.ok)
+		routingLogs = ((await routeRes.json()) as { logs: RoutingLog[] }).logs;
 }
 
 function shortPath(path: string | null): string {
@@ -123,28 +141,28 @@ async function readApiError(res: Response): Promise<string> {
 </script>
 
 <svelte:head>
-	<title>Workspace Sync - Bryon</title>
+	<title>Workspace Sync — Bryon</title>
 </svelte:head>
 
 <div class="sync-page">
 	<header class="page-header">
 		<div>
 			<p class="eyebrow">.bryon workspace</p>
-			<h1>Workspace Sync</h1>
+			<h1 class="page-title">Workspace Sync</h1>
 			<p class="sub">{data.bryonRoot}</p>
 		</div>
 		<div class="actions">
-			<input bind:value={description} aria-label="Checkpoint description" />
-			<button type="button" onclick={createCheckpoint} disabled={busy}>Checkpoint</button>
-			<button type="button" onclick={syncWorkspace} disabled={busy}>
+			<input class="action-input" bind:value={description} aria-label="Checkpoint description" />
+			<button class="action-btn" type="button" onclick={createCheckpoint} disabled={busy}>Checkpoint</button>
+			<button class="action-btn" type="button" onclick={syncWorkspace} disabled={busy}>
 				<RefreshCw size={15} /> Sync
 			</button>
-			<button type="button" class="ghost" onclick={runAudit} disabled={busy}>Audit</button>
+			<button class="action-btn ghost" type="button" onclick={runAudit} disabled={busy}>Audit</button>
 		</div>
 	</header>
 
 	{#if errorMessage}
-		<p class="error">{errorMessage}</p>
+		<p class="error-msg">{errorMessage}</p>
 	{/if}
 
 	<section class="summary">
@@ -168,8 +186,8 @@ async function readApiError(res: Response): Promise<string> {
 	<div class="grid">
 		<section class="panel">
 			<div class="panel-head">
-				<h2>Changed Files</h2>
-				<span>{changedFiles.length}</span>
+				<h2 class="panel-title">Changed Files</h2>
+				<span class="panel-count">{changedFiles.length}</span>
 			</div>
 			<ul class="rows">
 				{#each changedFiles as file}
@@ -186,8 +204,8 @@ async function readApiError(res: Response): Promise<string> {
 
 		<section class="panel">
 			<div class="panel-head">
-				<h2>Audit Findings</h2>
-				<span>{findings.length}</span>
+				<h2 class="panel-title">Audit Findings</h2>
+				<span class="panel-count">{findings.length}</span>
 			</div>
 			<ul class="rows">
 				{#each findings as finding (finding.id)}
@@ -207,8 +225,8 @@ async function readApiError(res: Response): Promise<string> {
 
 		<section class="panel">
 			<div class="panel-head">
-				<h2>Checkpoints</h2>
-				<span>{checkpoints.length}</span>
+				<h2 class="panel-title">Checkpoints</h2>
+				<span class="panel-count">{checkpoints.length}</span>
 			</div>
 			<ul class="rows">
 				{#each checkpoints as checkpoint (checkpoint.id)}
@@ -225,16 +243,20 @@ async function readApiError(res: Response): Promise<string> {
 
 		<section class="panel">
 			<div class="panel-head">
-				<h2>Routing Logs</h2>
-				<span>{routingLogs.length}</span>
+				<h2 class="panel-title">Routing Logs</h2>
+				<span class="panel-count">{routingLogs.length}</span>
 			</div>
 			<ul class="rows">
 				{#each routingLogs as log (log.id)}
 					<li>
-						<strong>{log.taskType}</strong>
-						<span>Tier {log.tier} - {log.remote ? 'remote' : 'local'}</span>
-						<code>{log.model}</code>
-						<p>{log.privacyDecision}{log.errorCode ? ` - ${log.errorCode}` : ''}</p>
+						<RoutingDecisionSummary
+							taskType={log.taskType}
+							tier={log.tier}
+							model={log.model}
+							remote={log.remote}
+							privacyDecision={log.privacyDecision}
+							errorCode={log.errorCode}
+						/>
 					</li>
 				{:else}
 					<li class="empty">No routing logs yet.</li>
@@ -264,32 +286,25 @@ async function readApiError(res: Response): Promise<string> {
 	border-bottom: 1px solid var(--border-subtle);
 }
 
-h1,
-h2,
-p {
+.page-title {
 	margin: 0;
-}
-
-h1 {
-	font-size: 26px;
-}
-
-h2 {
-	font-size: 15px;
+	font-size: var(--font-size-heading);
+	font-weight: 700;
+	color: var(--text-primary);
+	letter-spacing: -0.01em;
 }
 
 .eyebrow {
-	margin-bottom: 3px;
+	margin: 0 0 3px;
 	color: var(--accent-text);
 	font-size: 12px;
 	font-weight: 700;
+	letter-spacing: 0.08em;
 	text-transform: uppercase;
 }
 
-.sub,
-.rows span,
-.rows p,
-.empty {
+.sub {
+	margin: var(--sp-1) 0 0;
 	color: var(--text-muted);
 	font-size: 12px;
 }
@@ -300,7 +315,7 @@ h2 {
 	gap: var(--sp-2);
 }
 
-input {
+.action-input {
 	min-height: 36px;
 	border: 1px solid var(--border-default);
 	border-radius: var(--radius-sm);
@@ -308,33 +323,57 @@ input {
 	color: var(--text-primary);
 	padding: 7px 10px;
 	font: inherit;
+	font-size: 13px;
+	outline: none;
+	transition: border-color var(--motion-fast);
 }
 
-button {
+.action-input:focus {
+	border-color: var(--accent);
+}
+
+.action-input::placeholder {
+	color: var(--text-placeholder);
+}
+
+.action-btn {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
 	gap: 6px;
 	min-height: 36px;
-	border: 0;
+	border: 1px solid var(--accent);
 	border-radius: var(--radius-sm);
 	background: var(--accent);
-	color: var(--primary-foreground);
-	padding: 0 12px;
+	color: #fff;
+	padding: 0 14px;
 	font: inherit;
-	font-weight: 700;
+	font-size: 13px;
+	font-weight: 600;
 	cursor: pointer;
+	white-space: nowrap;
+	transition: opacity var(--motion-fast), background var(--motion-fast);
 }
 
-button:disabled {
-	opacity: 0.55;
+.action-btn:hover:not(:disabled) {
+	background: color-mix(in oklab, var(--accent) 85%, #fff);
+}
+
+.action-btn:disabled {
+	opacity: 0.45;
 	cursor: not-allowed;
 }
 
-.ghost {
-	border: 1px solid var(--border-subtle);
-	background: var(--bg-surface);
+.action-btn.ghost {
+	border: 1px solid var(--border-default);
+	background: transparent;
 	color: var(--text-secondary);
+}
+
+.action-btn.ghost:hover:not(:disabled) {
+	background: var(--bg-surface);
+	border-color: var(--border-strong);
+	color: var(--text-primary);
 }
 
 .summary {
@@ -356,6 +395,7 @@ button:disabled {
 
 .summary strong {
 	font-size: 20px;
+	color: var(--text-primary);
 }
 
 .summary span {
@@ -384,6 +424,25 @@ button:disabled {
 	margin-bottom: var(--sp-3);
 }
 
+.panel-title {
+	margin: 0;
+	font-size: 15px;
+	font-weight: 700;
+	color: var(--text-primary);
+}
+
+.panel-count {
+	font-size: 11px;
+	font-weight: 600;
+	color: var(--text-placeholder);
+	min-width: 18px;
+	height: 18px;
+	display: grid;
+	place-items: center;
+	border-radius: 4px;
+	background: rgba(255, 255, 255, 0.06);
+}
+
 .rows {
 	display: grid;
 	gap: var(--sp-2);
@@ -405,7 +464,19 @@ button:disabled {
 	opacity: 0.7;
 }
 
-code {
+.rows li strong {
+	font-size: 13px;
+	color: var(--text-primary);
+}
+
+.rows li span,
+.rows li p {
+	margin: 0;
+	color: var(--text-muted);
+	font-size: 12px;
+}
+
+.rows code {
 	overflow: hidden;
 	color: var(--text-secondary);
 	font-size: 12px;
@@ -413,8 +484,17 @@ code {
 	white-space: nowrap;
 }
 
-.error {
+.rows .empty {
+	display: flex;
+	align-items: center;
+	gap: var(--sp-2);
+	color: var(--text-muted);
+	font-size: 12px;
+}
+
+.error-msg {
 	color: var(--red, #f87171);
+	margin: 0;
 }
 
 @media (max-width: 900px) {

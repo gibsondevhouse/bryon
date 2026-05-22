@@ -57,6 +57,24 @@ describe('settingsSchema', () => {
 		expect(parsed.llm.backend).toBe('ollama');
 		expect(parsed.llm.model).toBe('gemma4:e4b');
 		expect(parsed.llm.params.temperature).toBe(1.0);
+		expect(parsed.privacy.local_only_categories).toEqual([]);
+	});
+
+	it('normalizes custom local-only categories', () => {
+		const parsed = settingsSchema.parse({
+			privacy: {
+				local_only_categories: [
+					'Client Files',
+					'client-files',
+					' Export Controlled ',
+				],
+			},
+		});
+
+		expect(parsed.privacy.local_only_categories).toEqual([
+			'client_files',
+			'export_controlled',
+		]);
 	});
 
 	it('rejects llm.backend other than "ollama"', () => {

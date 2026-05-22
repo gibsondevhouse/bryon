@@ -4,30 +4,17 @@ import { goto } from '$app/navigation';
 import { ClipboardCheck, FileText } from '@lucide/svelte';
 import { fmtDate } from '$lib/utils';
 import DoctrineStatusBadge from '$lib/features/doctrine/DoctrineStatusBadge.svelte';
-import type { Plan, PlanStatus } from '$lib/shared/types';
+import type { Plan } from '$lib/shared/types';
 
 let { data } = $props();
 
 let plans = $state<Plan[]>(untrack(() => data.plans));
 
-// TODO(Phase 102): replace with plan.doctrineLifecycle once planSchema exposes it.
-function doctrineLifecycleFor(status: PlanStatus): string {
-	const mapping: Record<string, string> = {
-		ideation: 'proposed',
-		definition: 'drafting',
-		drafting: 'drafting',
-		execution: 'active',
-		active: 'active',
-		maintenance: 'archived',
-	};
-	return mapping[status] ?? 'proposed';
-}
-
 const activePlans = $derived(
-	plans.filter((p) => ['execution', 'active'].includes(p.status) && !p.archivedAt)
+	plans.filter((p) => p.doctrineLifecycle === 'active' && !p.archivedAt),
 );
 const archivedPlans = $derived(
-	plans.filter((p) => p.status === 'maintenance' || p.archivedAt)
+	plans.filter((p) => p.doctrineLifecycle === 'archived'),
 );
 const allReviewable = $derived([...activePlans, ...archivedPlans]);
 </script>
@@ -70,7 +57,7 @@ const allReviewable = $derived([...activePlans, ...archivedPlans]);
 									{/if}
 								</div>
 								<div class="card-side">
-									<DoctrineStatusBadge kind="plan" status={doctrineLifecycleFor(plan.status)} />
+									<DoctrineStatusBadge kind="plan" status={plan.doctrineLifecycle} />
 									<span class="card-date">{fmtDate(plan.updatedAt)}</span>
 								</div>
 							</button>
@@ -96,7 +83,7 @@ const allReviewable = $derived([...activePlans, ...archivedPlans]);
 									{/if}
 								</div>
 								<div class="card-side">
-									<DoctrineStatusBadge kind="plan" status={doctrineLifecycleFor(plan.status)} />
+									<DoctrineStatusBadge kind="plan" status={plan.doctrineLifecycle} />
 									<span class="card-date">{fmtDate(plan.updatedAt)}</span>
 								</div>
 							</button>
@@ -115,13 +102,14 @@ const allReviewable = $derived([...activePlans, ...archivedPlans]);
 	display: flex;
 	flex-direction: column;
 	overflow: hidden;
+	padding: var(--sp-6);
 }
 
 .page-header {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	padding: var(--sp-6) var(--sp-6) var(--sp-5);
+	padding-bottom: var(--sp-5);
 	border-bottom: 1px solid var(--border-subtle);
 	flex-shrink: 0;
 }
@@ -153,7 +141,7 @@ const allReviewable = $derived([...activePlans, ...archivedPlans]);
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
-	padding: var(--sp-6);
+	padding-top: var(--sp-5);
 }
 
 .empty-state {
@@ -244,6 +232,7 @@ const allReviewable = $derived([...activePlans, ...archivedPlans]);
 	line-height: 1.45;
 	display: -webkit-box;
 	-webkit-line-clamp: 2;
+	line-clamp: 2;
 	-webkit-box-orient: vertical;
 	overflow: hidden;
 }

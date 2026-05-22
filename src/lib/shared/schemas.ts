@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { normalizeRoutingCategories } from './routing';
 
 export const defaultLLMParams = {
 	temperature: 1.0,
@@ -33,7 +34,8 @@ export const defaultLLMSettings = {
 export const defaultPrivacySettings = {
 	tier3_enabled: false,
 	require_remote_preview: false,
-} as const;
+	local_only_categories: [] as string[],
+};
 
 export const defaultWebSearchSettings = {
 	enabled: true,
@@ -229,12 +231,26 @@ export const missionNeedSchema = z.object({
 	source: missionNeedSourceSchema.nullable().default(null),
 });
 
+const defaultMissionNeed = {
+	gap: null,
+	context: null,
+	priority: null,
+	source: null,
+} satisfies z.infer<typeof missionNeedSchema>;
+
 export const commandersIntentSchema = z.object({
 	purpose: z.string().nullable().default(null),
 	keyTasks: z.array(z.string().min(1)).default([]),
 	endState: z.string().nullable().default(null),
 	constraints: z.array(z.string().min(1)).default([]),
 });
+
+const defaultCommandersIntent = {
+	purpose: null,
+	keyTasks: [],
+	endState: null,
+	constraints: [],
+} satisfies z.infer<typeof commandersIntentSchema>;
 
 export const oplanSchema = z.object({
 	missionStatement: z.string().nullable().default(null),
@@ -245,13 +261,30 @@ export const oplanSchema = z.object({
 	references: z.array(z.string().min(1)).default([]),
 });
 
+const defaultOplan = {
+	missionStatement: null,
+	executionTimeline: [],
+	taskOrganization: [],
+	sustainment: [],
+	annexes: [],
+	references: [],
+} satisfies z.infer<typeof oplanSchema>;
+
 export const planDoctrineSchema = z.object({
 	lifecycle: doctrineLifecycleSchema.nullable().default(null),
-	missionNeed: missionNeedSchema,
-	commandersIntent: commandersIntentSchema,
+	missionNeed: missionNeedSchema.default(defaultMissionNeed),
+	commandersIntent: commandersIntentSchema.default(defaultCommandersIntent),
 	lineOfEffort: z.array(z.string().min(1)).default([]),
-	oplan: oplanSchema,
+	oplan: oplanSchema.default(defaultOplan),
 });
+
+const defaultPlanDoctrine = {
+	lifecycle: null,
+	missionNeed: defaultMissionNeed,
+	commandersIntent: defaultCommandersIntent,
+	lineOfEffort: [],
+	oplan: defaultOplan,
+} satisfies z.infer<typeof planDoctrineSchema>;
 
 export const conopsDecisionPointSchema = z.object({
 	id: z.string().min(1),
@@ -299,7 +332,14 @@ export const opordSchema = z.object({
 });
 
 export const fragoTargetSchema = z.object({
-	kind: z.enum(['plan', 'phase', 'opord_paragraph', 'project', 'task', 'plan_card']),
+	kind: z.enum([
+		'plan',
+		'phase',
+		'opord_paragraph',
+		'project',
+		'task',
+		'plan_card',
+	]),
 	id: z.string().min(1),
 	paragraph: z.string().nullable().default(null),
 	note: z.string().nullable().default(null),
@@ -326,7 +366,13 @@ export const fragoSchema = z.object({
 export const fragoImpactSchema = z.object({
 	id: z.string().min(1),
 	fragoId: z.string().min(1),
-	entityKind: z.enum(['task', 'project', 'phase', 'plan_card', 'opord_paragraph']),
+	entityKind: z.enum([
+		'task',
+		'project',
+		'phase',
+		'plan_card',
+		'opord_paragraph',
+	]),
 	entityId: z.string().min(1),
 	impactKind: z.enum(['added', 'modified', 'deleted', 'flagged']),
 	createdAt: z.number().int().nonnegative(),
@@ -393,51 +439,53 @@ export const intakeScanFileKindSchema = z.enum([
 ]);
 
 export const intakeScanFileSchema = z.object({
-	id:                  z.string().min(1),
-	path:                z.string().min(1),
-	size:                z.number().int().nonnegative(),
-	kind:                intakeScanFileKindSchema,
-	ext:                 z.string(),
-	sensitive:           z.boolean().default(false),
-	category:            z.string().default('other'),
-	reviewState:         z.enum(['pending', 'included', 'excluded']).default('pending'),
-	proposedPlanName:    z.string().nullable().default(null),
+	id: z.string().min(1),
+	path: z.string().min(1),
+	size: z.number().int().nonnegative(),
+	kind: intakeScanFileKindSchema,
+	ext: z.string(),
+	sensitive: z.boolean().default(false),
+	category: z.string().default('other'),
+	reviewState: z.enum(['pending', 'included', 'excluded']).default('pending'),
+	proposedPlanName: z.string().nullable().default(null),
 	proposedProjectName: z.string().nullable().default(null),
 });
 
 export const intakeScanSchema = z.object({
-	id:               z.string().min(1),
-	folderPath:       z.string().min(1),
-	status:           intakeScanStatusSchema,
-	phase:            intakeScanPhaseSchema,
-	filesFound:       z.number().int().nonnegative(),
-	filesClassified:  z.number().int().nonnegative(),
-	errorMessage:     z.string().nullable().default(null),
-	result:           z.array(intakeScanFileSchema).nullable().default(null),
-	progress:         z.object({
-		phase:   intakeScanPhaseSchema,
-		scanned: z.number().int().nonnegative(),
-	}).default({ phase: 'queued', scanned: 0 }),
-	createdAt:        z.number().int().nonnegative(),
-	updatedAt:        z.number().int().nonnegative(),
-	cancelledAt:      z.number().int().nonnegative().nullable().default(null),
-	completedAt:      z.number().int().nonnegative().nullable().default(null),
+	id: z.string().min(1),
+	folderPath: z.string().min(1),
+	status: intakeScanStatusSchema,
+	phase: intakeScanPhaseSchema,
+	filesFound: z.number().int().nonnegative(),
+	filesClassified: z.number().int().nonnegative(),
+	errorMessage: z.string().nullable().default(null),
+	result: z.array(intakeScanFileSchema).nullable().default(null),
+	progress: z
+		.object({
+			phase: intakeScanPhaseSchema,
+			scanned: z.number().int().nonnegative(),
+		})
+		.default({ phase: 'queued', scanned: 0 }),
+	createdAt: z.number().int().nonnegative(),
+	updatedAt: z.number().int().nonnegative(),
+	cancelledAt: z.number().int().nonnegative().nullable().default(null),
+	completedAt: z.number().int().nonnegative().nullable().default(null),
 });
 
 export const taskSchema = z.object({
-	id:          z.string().min(1),
-	planId:      z.string().min(1),
-	body:        z.string().default(''),
-	done:        z.boolean().default(false),
-	title:       z.string().default(''),
+	id: z.string().min(1),
+	planId: z.string().min(1),
+	body: z.string().default(''),
+	done: z.boolean().default(false),
+	title: z.string().default(''),
 	description: z.string().nullable().default(null),
-	status:      taskStatusSchema.default('planned'),
-	projectId:   z.string().nullable().default(null),
-	assignee:    z.string().nullable().default(null),
-	dueDate:     z.string().nullable().default(null),
-	sortOrder:   z.number().int().nullable().default(null),
-	createdAt:   z.number().int().nonnegative(),
-	updatedAt:   z.number().int().nonnegative(),
+	status: taskStatusSchema.default('planned'),
+	projectId: z.string().nullable().default(null),
+	assignee: z.string().nullable().default(null),
+	dueDate: z.string().nullable().default(null),
+	sortOrder: z.number().int().nullable().default(null),
+	createdAt: z.number().int().nonnegative(),
+	updatedAt: z.number().int().nonnegative(),
 });
 
 export const taskTraceabilitySchema = z.object({
@@ -452,25 +500,36 @@ export const taskTraceabilitySchema = z.object({
 });
 
 export const planCardSeriesSchema = z.enum([
-	'100', '200', '300', '400', '500', '600', '700', '800', '900', '1000',
+	'100',
+	'200',
+	'300',
+	'400',
+	'500',
+	'600',
+	'700',
+	'800',
+	'900',
+	'1000',
 ]);
 
 export const planCardSchema = z.object({
-	id:            z.string().min(1),
-	planId:        z.string().min(1),
-	series:        planCardSeriesSchema.default('100'),
-	title:         z.string().min(1),
-	body:          z.string().nullable().default(null),
-	sortOrder:     z.number().int().nullable().default(null),
-	locked:        z.boolean().default(false),
-	contextWeight: z.enum(['always', 'conditional', 'never']).default('conditional'),
-	archivedAt:    z.number().int().nonnegative().nullable().default(null),
-	createdAt:     z.number().int().nonnegative(),
-	updatedAt:     z.number().int().nonnegative(),
+	id: z.string().min(1),
+	planId: z.string().min(1),
+	series: planCardSeriesSchema.default('100'),
+	title: z.string().min(1),
+	body: z.string().nullable().default(null),
+	sortOrder: z.number().int().nullable().default(null),
+	locked: z.boolean().default(false),
+	contextWeight: z
+		.enum(['always', 'conditional', 'never'])
+		.default('conditional'),
+	archivedAt: z.number().int().nonnegative().nullable().default(null),
+	createdAt: z.number().int().nonnegative(),
+	updatedAt: z.number().int().nonnegative(),
 });
 
 // Phase 101: status is canonical. Doctrine columns (doctrineLifecycle, missionNeed*,
-// intent*, oplan*, lineOfEffort) exist in DB; Phase 102 wires them via planDoctrineSchema.
+// intent*, oplan*, lineOfEffort) exist in DB; 102A wires them via planDoctrineSchema.
 export const planSchema = z.object({
 	id: z.string().min(1),
 	name: z.string().min(1),
@@ -479,24 +538,26 @@ export const planSchema = z.object({
 	startDate: z.string().nullable().default(null),
 	projectId: z.string().nullable().default(null),
 	status: planStatusSchema,
+	doctrineLifecycle: doctrineLifecycleSchema.default('proposed'),
+	doctrine: planDoctrineSchema.default(defaultPlanDoctrine),
 	archivedAt: z.number().int().nonnegative().nullable().default(null),
 	createdAt: z.number().int().nonnegative(),
 	updatedAt: z.number().int().nonnegative(),
 });
 
 export const projectSchema = z.object({
-	id:             z.string().min(1),
-	name:           z.string().min(1),
-	description:    z.string().nullable().default(null),
+	id: z.string().min(1),
+	name: z.string().min(1),
+	description: z.string().nullable().default(null),
 	promptOverride: z.string().nullable().default(null),
-	memoryEnabled:  z.boolean().default(true),
-	remember:       z.string().default(''),
-	neverSuggest:   z.string().default(''),
-	status:         projectStatusSchema.default('ideation'),
-	planId:         z.string().nullable().default(null),
-	archivedAt:     z.number().int().nonnegative().nullable().default(null),
-	createdAt:      z.number().int().nonnegative(),
-	updatedAt:      z.number().int().nonnegative(),
+	memoryEnabled: z.boolean().default(true),
+	remember: z.string().default(''),
+	neverSuggest: z.string().default(''),
+	status: projectStatusSchema.default('ideation'),
+	planId: z.string().nullable().default(null),
+	archivedAt: z.number().int().nonnegative().nullable().default(null),
+	createdAt: z.number().int().nonnegative(),
+	updatedAt: z.number().int().nonnegative(),
 });
 
 export const projectFileSchema = z.object({
@@ -535,32 +596,42 @@ export const memoryEntrySchema = z.object({
 });
 
 export const appSettingsSchema = z.object({
-	host:          z.string().min(1).default(defaultAppSettings.host),
-	port:          z.number().int().positive().default(defaultAppSettings.port),
-	data_dir:      z.string().min(1).default(defaultAppSettings.data_dir),
+	host: z.string().min(1).default(defaultAppSettings.host),
+	port: z.number().int().positive().default(defaultAppSettings.port),
+	data_dir: z.string().min(1).default(defaultAppSettings.data_dir),
 	workspace_dir: z.string().default(defaultAppSettings.workspace_dir),
 });
 
 export const llmSettingsSchema = z.object({
-	backend:      z.literal('ollama').default(defaultLLMSettings.backend),
-	base_url:     z.string().min(1).default(defaultLLMSettings.base_url),
-	model:        z.string().min(1).default(defaultLLMSettings.model),
+	backend: z.literal('ollama').default(defaultLLMSettings.backend),
+	base_url: z.string().min(1).default(defaultLLMSettings.base_url),
+	model: z.string().min(1).default(defaultLLMSettings.model),
 	vision_model: z.string().min(1).default(defaultLLMSettings.vision_model),
-	small_model:  z.string().default(defaultLLMSettings.small_model),
-	large_model:  z.string().default(defaultLLMSettings.large_model),
-	flash_model:  z.string().default(defaultLLMSettings.flash_model),
-	gemini_api:   z.object({
-		enabled: z.boolean().default(false),
-		model:   z.string().default(''),
-		api_key: z.string().default(''),
-	}).default(defaultLLMSettings.gemini_api),
-	thinking:     z.enum(['off', 'auto', 'light', 'normal', 'extended']).default(defaultLLMSettings.thinking),
-	params:       llmParamsSchema.default(defaultLLMParams),
+	small_model: z.string().default(defaultLLMSettings.small_model),
+	large_model: z.string().default(defaultLLMSettings.large_model),
+	flash_model: z.string().default(defaultLLMSettings.flash_model),
+	gemini_api: z
+		.object({
+			enabled: z.boolean().default(false),
+			model: z.string().default(''),
+			api_key: z.string().default(''),
+		})
+		.default(defaultLLMSettings.gemini_api),
+	thinking: z
+		.enum(['off', 'auto', 'light', 'normal', 'extended'])
+		.default(defaultLLMSettings.thinking),
+	params: llmParamsSchema.default(defaultLLMParams),
 });
 
 export const privacySettingsSchema = z.object({
-	tier3_enabled:         z.boolean().default(defaultPrivacySettings.tier3_enabled),
-	require_remote_preview: z.boolean().default(defaultPrivacySettings.require_remote_preview),
+	tier3_enabled: z.boolean().default(defaultPrivacySettings.tier3_enabled),
+	require_remote_preview: z
+		.boolean()
+		.default(defaultPrivacySettings.require_remote_preview),
+	local_only_categories: z
+		.array(z.string().trim().min(1))
+		.default(defaultPrivacySettings.local_only_categories)
+		.transform(normalizeRoutingCategories),
 });
 
 export const webSearchSettingsSchema = z.object({
@@ -591,15 +662,17 @@ export const defaultAppearanceSettings = {
 } as const;
 
 export const appearanceSettingsSchema = z.object({
-	doctrine_label_mode: doctrineLabelModeSchema.default(defaultAppearanceSettings.doctrine_label_mode),
+	doctrine_label_mode: doctrineLabelModeSchema.default(
+		defaultAppearanceSettings.doctrine_label_mode,
+	),
 });
 
 export const settingsSchema = z.object({
-	app:        appSettingsSchema.default(defaultAppSettings),
-	llm:        llmSettingsSchema.default(defaultLLMSettings),
+	app: appSettingsSchema.default(defaultAppSettings),
+	llm: llmSettingsSchema.default(defaultLLMSettings),
 	web_search: webSearchSettingsSchema.default(defaultWebSearchSettings),
-	memory:     memorySettingsSchema.default(defaultMemorySettings),
-	privacy:    privacySettingsSchema.default(defaultPrivacySettings),
+	memory: memorySettingsSchema.default(defaultMemorySettings),
+	privacy: privacySettingsSchema.default(defaultPrivacySettings),
 	appearance: appearanceSettingsSchema.default(defaultAppearanceSettings),
 });
 
@@ -609,5 +682,7 @@ export const streamRequestSchema = z.object({
 	attachments: z.array(attachmentSchema).optional(),
 	projectFileIds: z.array(z.string().min(1)).optional(),
 	webSearch: z.boolean().optional().default(false),
-	thinkingMode: z.enum(['off', 'auto', 'light', 'normal', 'extended']).optional(),
+	thinkingMode: z
+		.enum(['off', 'auto', 'light', 'normal', 'extended'])
+		.optional(),
 });
