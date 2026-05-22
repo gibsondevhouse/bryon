@@ -1,0 +1,19 @@
+export const doctrineRoutes = {
+	commandCenter: '/',
+	intake: '/intake',
+	plans: '/plans',
+	planDetail: (id: string) => `/plans/${id}`,
+	planOpord: (planId: string) => `/plans/${planId}/opord`,
+	execution: '/execution',
+	review: '/review',
+	workspaceSync: '/workspace-sync',
+	chat: '/chats',
+	chatDetail: (id: string) => `/chats/${id}`,
+	settings: '/settings',
+	projects: '/projects',
+	projectDetail: (id: string) => `/projects/${id}`,
+
+	// Legacy redirects
+	legacyPlanning: '/planning',
+	legacyPlanDetail: (id: string) => `/planning/${id}`,
+} as const;

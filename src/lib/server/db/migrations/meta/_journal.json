@@ -57,6 +57,55 @@
       "when": 1779247000000,
       "tag": "0007_v15_projects",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1779287504721,
+      "tag": "0008_cloudy_black_bolt",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1748044800000,
+      "tag": "0009_intake_scans",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1748131200000,
+      "tag": "0010_plan_tasks",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1748217600000,
+      "tag": "0011_plans_project_link",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1748304000000,
+      "tag": "0012_plan_workspace_expansion",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1779421800000,
+      "tag": "0013_repair_tasks_intake_drift",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1779435096099,
+      "tag": "0014_massive_senator_kelly",
+      "breakpoints": true
     }
   ]
 }

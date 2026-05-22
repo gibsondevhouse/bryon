@@ -40,3 +40,7 @@ pnpm-debug.log*
 
 # Temp / scratch files
 tmp-*
+
+# Planning / architecture docs — keep on disk, not in git
+dev/
+100-COURSE-CORRECTION/

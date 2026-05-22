@@ -162,7 +162,10 @@ function registerShutdownHandlers(): void {
 	if (shutdownRegistered) return;
 	shutdownRegistered = true;
 
+	let shuttingDown = false;
 	const shutdown = (signal: NodeJS.Signals) => {
+		if (shuttingDown) return;
+		shuttingDown = true;
 		try {
 			getLogger().info({ signal }, 'db.closing');
 			closeDb();
@@ -170,10 +173,16 @@ function registerShutdownHandlers(): void {
 		} catch (error) {
 			getLogger().error({ error }, 'db.close_failed');
 		} finally {
+			// Force exit so the listening socket is released and the port frees
+			// immediately, even if adapter-node has lingering keep-alive sockets.
 			process.exit(0);
 		}
 	};
 
-	process.once('SIGINT', shutdown);
-	process.once('SIGTERM', shutdown);
+	// SIGHUP fires when the controlling terminal closes; without this handler
+	// a backgrounded `node build` (especially after `disown`) lingers and keeps
+	// the port bound.
+	process.on('SIGHUP', shutdown);
+	process.on('SIGINT', shutdown);
+	process.on('SIGTERM', shutdown);
 }

@@ -10,9 +10,11 @@ import { dirname, join } from 'node:path';
 import { parse } from 'smol-toml';
 import {
 	defaultAppSettings,
+	defaultAppearanceSettings,
 	defaultLLMParams,
 	defaultLLMSettings,
 	defaultMemorySettings,
+	defaultPrivacySettings,
 	defaultWebSearchSettings,
 	settingsSchema,
 } from '../shared/schemas';
@@ -66,6 +68,7 @@ export function loadConfig(
 			app: {
 				...config.app,
 				data_dir: expandHome(config.app.data_dir),
+				workspace_dir: expandHome(config.app.workspace_dir),
 			},
 		},
 		configPath,
@@ -93,12 +96,21 @@ export function serializeConfig(config: Settings): string {
 host = ${tomlString(config.app.host)}
 port = ${config.app.port}
 data_dir = ${tomlString(config.app.data_dir)}
+workspace_dir = ${tomlString(config.app.workspace_dir)}
 
 [llm]
 backend = ${tomlString(config.llm.backend)}
 base_url = ${tomlString(config.llm.base_url)}
 model = ${tomlString(config.llm.model)}
 vision_model = ${tomlString(config.llm.vision_model)}
+small_model = ${tomlString(config.llm.small_model)}
+large_model = ${tomlString(config.llm.large_model)}
+flash_model = ${tomlString(config.llm.flash_model)}
+
+[llm.gemini_api]
+enabled = ${config.llm.gemini_api.enabled}
+model = ${tomlString(config.llm.gemini_api.model)}
+api_key = ${tomlString(config.llm.gemini_api.api_key)}
 
 [llm.params]
 temperature = ${config.llm.params.temperature}
@@ -118,6 +130,13 @@ max_results = ${config.web_search.max_results}
 enabled = ${config.memory.enabled}
 remember = ${tomlString(config.memory.remember)}
 never_suggest = ${tomlString(config.memory.never_suggest)}
+
+[privacy]
+tier3_enabled = ${config.privacy.tier3_enabled}
+require_remote_preview = ${config.privacy.require_remote_preview}
+
+[appearance]
+doctrine_label_mode = ${tomlString(config.appearance.doctrine_label_mode)}
 `;
 }
 
@@ -134,6 +153,10 @@ function applyEnvOverrides(config: Settings): Settings {
 				process.env.BRYON_DATA_DIR ??
 				config.app.data_dir ??
 				defaultAppSettings.data_dir,
+			workspace_dir:
+				process.env.BRYON_WORKSPACE_DIR ??
+				config.app.workspace_dir ??
+				defaultAppSettings.workspace_dir,
 		},
 		llm: {
 			backend: 'ollama',
@@ -149,6 +172,32 @@ function applyEnvOverrides(config: Settings): Settings {
 				process.env.BRYON_LLM_VISION_MODEL ??
 				config.llm.vision_model ??
 				defaultLLMSettings.vision_model,
+			small_model:
+				process.env.BRYON_LLM_SMALL_MODEL ??
+				config.llm.small_model ??
+				defaultLLMSettings.small_model,
+			large_model:
+				process.env.BRYON_LLM_LARGE_MODEL ??
+				config.llm.large_model ??
+				defaultLLMSettings.large_model,
+			flash_model:
+				process.env.BRYON_LLM_FLASH_MODEL ??
+				config.llm.flash_model ??
+				defaultLLMSettings.flash_model,
+			gemini_api: {
+				enabled:
+					parseBoolean(process.env.BRYON_GEMINI_ENABLED) ??
+					config.llm.gemini_api.enabled ??
+					defaultLLMSettings.gemini_api.enabled,
+				model:
+					process.env.BRYON_GEMINI_MODEL ??
+					config.llm.gemini_api.model ??
+					defaultLLMSettings.gemini_api.model,
+				api_key:
+					process.env.BRYON_GEMINI_API_KEY ??
+					config.llm.gemini_api.api_key ??
+					defaultLLMSettings.gemini_api.api_key,
+			},
 			params: {
 				temperature:
 					parseNumber(process.env.BRYON_LLM_TEMPERATURE) ??
@@ -207,6 +256,21 @@ function applyEnvOverrides(config: Settings): Settings {
 				process.env.BRYON_MEMORY_NEVER_SUGGEST ??
 				config.memory.never_suggest ??
 				defaultMemorySettings.never_suggest,
+		},
+		privacy: {
+			tier3_enabled:
+				parseBoolean(process.env.BRYON_PRIVACY_TIER3_ENABLED) ??
+				config.privacy.tier3_enabled ??
+				defaultPrivacySettings.tier3_enabled,
+			require_remote_preview:
+				parseBoolean(process.env.BRYON_PRIVACY_REQUIRE_REMOTE_PREVIEW) ??
+				config.privacy.require_remote_preview ??
+				defaultPrivacySettings.require_remote_preview,
+		},
+		appearance: {
+			doctrine_label_mode:
+				config.appearance?.doctrine_label_mode ??
+				defaultAppearanceSettings.doctrine_label_mode,
 		},
 	});
 }

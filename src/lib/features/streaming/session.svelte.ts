@@ -1,4 +1,4 @@
-import type { Attachment, Chat, Message, Project, ProjectFile, Settings } from '$lib/shared/types';
+import type { Attachment, Chat, Message, Plan, Project, ProjectFile, Settings } from '$lib/shared/types';
 import {
 	STREAM_ERROR_CODE,
 	type NewsArticle,
@@ -47,6 +47,7 @@ export type SendOptions = {
 export class Session {
 	chats = $state<Chat[]>([]);
 	projects = $state<Project[]>([]);
+	plans = $state<Plan[]>([]);
 	projectFiles = $state(new Map<string, ProjectFile[]>());
 	currentChatId = $state<string | null>(null);
 	messages = $state<Message[]>([]);
@@ -86,6 +87,7 @@ export class Session {
 	hydrate(input: {
 		chats?: Chat[];
 		projects?: Project[];
+		plans?: Plan[];
 		currentChatId?: string | null;
 		messages?: Message[];
 		projectFiles?: ProjectFile[];
@@ -94,6 +96,7 @@ export class Session {
 	}): void {
 		if (input.chats) this.chats = input.chats;
 		if (input.projects) this.projects = input.projects;
+		if (input.plans) this.plans = input.plans;
 		if ('currentChatId' in input) {
 			this.currentChatId = input.currentChatId ?? null;
 		}

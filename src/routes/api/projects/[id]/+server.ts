@@ -11,6 +11,7 @@ const updateProjectSchema = z.object({
 	memoryEnabled: z.boolean().optional(),
 	remember: z.string().optional(),
 	neverSuggest: z.string().optional(),
+	status: z.enum(['ideation', 'definition', 'execution', 'maintenance']).optional(),
 	archived: z.boolean().optional(),
 });
 

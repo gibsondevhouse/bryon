@@ -1,6 +1,6 @@
 <script lang="ts">
 import '../app.css';
-import { onMount, untrack } from 'svelte';
+import { onMount } from 'svelte';
 import favicon from '$lib/assets/favicon.svg';
 import { page } from '$app/state';
 import { PanelLeft } from '@lucide/svelte';
@@ -26,15 +26,18 @@ let healthRetryError = $state<string | null>(null);
 let hasViewportSynced = $state(false);
 
 const currentChatId = $derived(page.params?.id ?? null);
+const isFullBleed   = $derived(
+	page.url.pathname === '/planning' || page.url.pathname === '/projects' ||
+	page.url.pathname === '/plans' || page.url.pathname === '/execution'
+);
 
 $effect(() => {
-	untrack(() => {
-		session.hydrate({
-			chats: data.chats,
-			projects: data.projects,
-			settings: data.settings,
-			ollamaReachable: healthReachable,
-		});
+	session.hydrate({
+		chats: data.chats,
+		projects: data.projects,
+		plans: data.plans,
+		settings: data.settings,
+		ollamaReachable: healthReachable,
 	});
 });
 
@@ -196,7 +199,7 @@ function onGlobalKey(e: KeyboardEvent): void {
 			</div>
 		{/if}
 
-		<div class="content" class:is-chat={!!currentChatId}>
+		<div class="content" class:is-chat={!!currentChatId} class:full-bleed={isFullBleed}>
 			{@render children()}
 		</div>
 	</main>
@@ -235,21 +238,28 @@ function onGlobalKey(e: KeyboardEvent): void {
 	grid-template-columns: var(--sidebar-w) minmax(0, 1fr) var(--activity-w);
 }
 
-/* ── Activity rail ── */
+/* ── Activity rail (tonal panel against the void) ── */
 .activity-rail {
+	position: relative;
+	z-index: 1;
 	overflow: hidden;
-	background: var(--bg-base);
+	background: var(--glass-bg);
+	border-left: 1px solid var(--border-hair);
 }
 
-/* ── Sidebar rail ── */
+/* ── Sidebar rail (tonal panel against the void) ── */
 .sidebar-rail {
+	position: relative;
+	z-index: 1;
 	overflow: hidden;
-	background: var(--bg-base);
+	background: var(--glass-bg);
+	border-right: 1px solid var(--border-hair);
 }
 
-/* ── Main ── */
+/* ── Main (stays opaque so inner routes keep crisp readability) ── */
 .main {
 	position: relative;
+	z-index: 1;
 	display: flex;
 	flex-direction: column;
 	min-width: 0;
@@ -269,6 +279,11 @@ function onGlobalKey(e: KeyboardEvent): void {
 	min-height: 0;
 	overflow: auto;
 	padding: var(--sp-6);
+}
+
+.content.full-bleed {
+	padding: 0;
+	overflow: hidden;
 }
 
 .content.is-chat {
