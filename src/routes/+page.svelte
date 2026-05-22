@@ -1,6 +1,6 @@
 <script lang="ts">
 import { goto } from '$app/navigation';
-import { ArrowUp, Paperclip, Globe, ArrowUpRight, MessageSquare, Folder, ListTodo, Activity } from '@lucide/svelte';
+import { ArrowUp, Paperclip, Globe, ArrowUpRight, MessageSquare, Folder, ListTodo, Activity, ExternalLink, Square } from '@lucide/svelte';
 import { session } from '$lib/features/streaming/session.svelte';
 import type { PlanStatus } from '$lib/shared/types';
 import type { Action } from 'svelte/action';
@@ -15,22 +15,35 @@ const online = $derived(data.ollamaReachable ?? session.ollamaReachable);
 let mode = $state<'chat' | 'web'>('chat');
 let value = $state('');
 let textarea = $state<HTMLTextAreaElement | null>(null);
+let msgsEl = $state<HTMLDivElement | null>(null);
+let chatId = $state<string | null>(null);
 
 const canSend = $derived(value.trim().length > 0);
+const inlineMessages = $derived(chatId ? session.messages.filter((m) => m.role !== 'system') : []);
+const isStreaming = $derived(session.streaming && session.currentChatId === chatId);
+const hasInlineChat = $derived(inlineMessages.length > 0 || isStreaming);
 
-async function startNewChat(): Promise<void> {
-	session.draftWebSearch = mode === 'web';
-	const id = await session.createChat();
-	if (id) goto(`/chats/${id}`);
-}
+// Auto-scroll to bottom when new content arrives
+$effect(() => {
+	void session.streamingContent;
+	void session.messages.length;
+	if (msgsEl) msgsEl.scrollTop = msgsEl.scrollHeight;
+});
 
 async function submit(): Promise<void> {
 	const content = value.trim();
 	if (!content) return;
-	const id = await session.createChat();
-	if (!id) return;
-	await goto(`/chats/${id}`);
-	void session.send(id, content, { webSearch: mode === 'web' });
+	value = '';
+	if (textarea) textarea.style.height = 'auto';
+
+	if (!chatId) {
+		const id = await session.createChat();
+		if (!id) return;
+		chatId = id;
+		session.hydrate({ currentChatId: id, messages: [] });
+	}
+
+	void session.send(chatId, content, { webSearch: mode === 'web' });
 }
 
 function onKeydown(e: KeyboardEvent): void {
@@ -82,11 +95,35 @@ const spotlight: Action<HTMLElement> = (node) => {
 <div class="canvas">
 	<div class="bento-grid">
 		<!-- Composer — the anchor -->
-		<section class="bento composer-tile glass" style:--idx={0} use:spotlight>
-			<header class="tile-brand">
-				<h1>Bryon</h1>
-				<p class="sub">Local · {data.settings.llm.model}</p>
+		<section class="bento composer-tile glass" class:has-chat={hasInlineChat} style:--idx={0} use:spotlight>
+			<header class="tile-brand" class:compact={hasInlineChat}>
+				{#if !hasInlineChat}
+					<h1>Bryon</h1>
+					<p class="sub">Local · {data.settings.llm.model}</p>
+				{:else}
+					<span class="brand-compact">Bryon</span>
+					{#if chatId}
+						<a href="/chats/{chatId}" class="open-chat-link">
+							Open in Chat <ExternalLink size={11} aria-hidden="true" />
+						</a>
+					{/if}
+				{/if}
 			</header>
+
+			{#if hasInlineChat}
+				<div class="inline-msgs" bind:this={msgsEl}>
+					{#each inlineMessages as msg (msg.id)}
+						{#if msg.role === 'user'}
+							<div class="msg msg-user">{msg.content}</div>
+						{:else if msg.role === 'assistant'}
+							<div class="msg msg-assistant">{msg.content ?? ''}</div>
+						{/if}
+					{/each}
+					{#if isStreaming && session.streamingContent}
+						<div class="msg msg-assistant msg-streaming">{session.streamingContent}</div>
+					{/if}
+				</div>
+			{/if}
 
 			<div class="composer-stack">
 				<div class="mode-track" role="tablist" aria-label="Mode" style:--idx={mode === 'web' ? 1 : 0}>
@@ -119,7 +156,7 @@ const spotlight: Action<HTMLElement> = (node) => {
 						bind:value
 						oninput={autosize}
 						onkeydown={onKeydown}
-						placeholder="Ask anything"
+						placeholder={hasInlineChat ? 'Reply...' : 'Ask anything'}
 						rows="1"
 						aria-label="Message"
 					></textarea>
@@ -142,21 +179,26 @@ const spotlight: Action<HTMLElement> = (node) => {
 							</button>
 						</div>
 
-						<button
-							type="submit"
-							class="send"
-							class:ready={canSend}
-							aria-label="Send"
-							data-testid="start-new-chat"
-							onclick={(e) => {
-								if (!canSend) {
-									e.preventDefault();
-									void startNewChat();
-								}
-							}}
-						>
-							<ArrowUp size={16} aria-hidden="true" />
-						</button>
+						{#if isStreaming}
+							<button
+								type="button"
+								class="send stop"
+								aria-label="Stop generating"
+								onclick={() => session.cancel()}
+							>
+								<Square size={12} aria-hidden="true" />
+							</button>
+						{:else}
+							<button
+								type="submit"
+								class="send"
+								class:ready={canSend}
+								aria-label="Send"
+								data-testid="start-new-chat"
+							>
+								<ArrowUp size={16} aria-hidden="true" />
+							</button>
+						{/if}
 					</div>
 				</form>
 			</div>
@@ -326,6 +368,85 @@ const spotlight: Action<HTMLElement> = (node) => {
 }
 
 .composer-tile  { grid-area: composer; justify-content: space-between; min-height: 280px; }
+.composer-tile.has-chat { justify-content: flex-start; gap: var(--sp-3); }
+
+/* Compact brand when chat is active */
+.tile-brand.compact {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--sp-3);
+	flex: none;
+}
+
+.brand-compact {
+	font-size: 13px;
+	font-weight: 600;
+	letter-spacing: -0.01em;
+	color: var(--text-muted);
+}
+
+.open-chat-link {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	font-size: 12px;
+	color: var(--text-muted);
+	text-decoration: none;
+	transition: color var(--motion-fast);
+}
+
+.open-chat-link:hover {
+	color: var(--accent-text);
+}
+
+/* Inline message list */
+.inline-msgs {
+	flex: 1;
+	overflow-y: auto;
+	display: flex;
+	flex-direction: column;
+	gap: var(--sp-3);
+	padding: 2px 2px 4px;
+	min-height: 0;
+	scrollbar-width: thin;
+}
+
+.msg {
+	max-width: 92%;
+	font-size: 13.5px;
+	line-height: 1.6;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.msg-user {
+	align-self: flex-end;
+	background: var(--accent-soft);
+	color: var(--text-primary);
+	padding: 8px 13px;
+	border-radius: 16px 16px 4px 16px;
+}
+
+.msg-assistant {
+	align-self: flex-start;
+	color: var(--text-secondary);
+}
+
+.msg-streaming {
+	opacity: 0.85;
+}
+
+.send.stop {
+	background: rgba(255, 255, 255, 0.08);
+	color: var(--text-muted);
+}
+
+.send.stop:hover {
+	background: rgba(255, 80, 80, 0.18);
+	color: #f87171;
+}
 .runtime-tile   { grid-area: runtime; }
 .recents-tile   { grid-area: recents; }
 .plans-tile     { grid-area: plans; }
