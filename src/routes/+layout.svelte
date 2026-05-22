@@ -1,6 +1,6 @@
 <script lang="ts">
 import '../app.css';
-import { onMount, untrack } from 'svelte';
+import { onMount } from 'svelte';
 import favicon from '$lib/assets/favicon.svg';
 import { page } from '$app/state';
 import { PanelLeft } from '@lucide/svelte';
@@ -31,14 +31,12 @@ const isFullBleed   = $derived(
 );
 
 $effect(() => {
-	untrack(() => {
-		session.hydrate({
-			chats: data.chats,
-			projects: data.projects,
-			plans: data.plans,
-			settings: data.settings,
-			ollamaReachable: healthReachable,
-		});
+	session.hydrate({
+		chats: data.chats,
+		projects: data.projects,
+		plans: data.plans,
+		settings: data.settings,
+		ollamaReachable: healthReachable,
 	});
 });
 
