@@ -37,6 +37,7 @@ pnpm-debug.log*
 
 # AI tool configs (contain local paths / personal settings)
 .claude/
+.bryon/
 
 # Temp / scratch files
 tmp-*
