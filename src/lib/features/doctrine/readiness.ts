@@ -1,4 +1,4 @@
-import type { PlanDoctrine, ConopsPhase } from '$lib/shared/types';
+import type { PlanDoctrine } from '$lib/shared/types';
 
 export type ReadinessCheck = {
 	key: string;
@@ -13,10 +13,7 @@ export type PlanReadiness = {
 	score: number;
 };
 
-export function evaluatePlanReadiness(
-	doctrine: PlanDoctrine | null,
-	phases: ConopsPhase[],
-): PlanReadiness {
+export function evaluatePlanReadiness(doctrine: PlanDoctrine | null): PlanReadiness {
 	const checks: ReadinessCheck[] = [
 		{
 			key: 'mission_need_gap',
@@ -47,12 +44,6 @@ export function evaluatePlanReadiness(
 			label: 'At least one key task',
 			passed: (doctrine?.commandersIntent?.keyTasks?.length ?? 0) > 0,
 			required: false,
-		},
-		{
-			key: 'conops_phases',
-			label: 'At least one CONOPS phase',
-			passed: phases.filter((p) => !p.archivedAt).length > 0,
-			required: true,
 		},
 		{
 			key: 'oplan_mission',

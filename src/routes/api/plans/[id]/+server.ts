@@ -17,6 +17,22 @@ const updatePlanSchema = z.object({
 	doctrineLifecycle: doctrineLifecycleSchema.optional(),
 	archived: z.boolean().optional(),
 	projectId: z.string().nullable().optional(),
+	missionNeed: z
+		.object({
+			gap: z.string().nullable().optional(),
+			context: z.string().nullable().optional(),
+			priority: z.string().nullable().optional(),
+			source: z.string().nullable().optional(),
+		})
+		.optional(),
+	commandersIntent: z
+		.object({
+			purpose: z.string().nullable().optional(),
+			endState: z.string().nullable().optional(),
+			keyTasks: z.array(z.string().min(1)).optional(),
+			constraints: z.array(z.string().min(1)).optional(),
+		})
+		.optional(),
 });
 
 export const GET: RequestHandler = async ({ params }) => {

@@ -512,6 +512,48 @@ export const planCardSeriesSchema = z.enum([
 	'1000',
 ]);
 
+export const planCardContextWeightSchema = z.enum([
+	'always',
+	'conditional',
+	'never',
+]);
+
+export const createPlanCardSchema = z.object({
+	series: planCardSeriesSchema,
+	title: z.string().trim().min(1),
+	body: z.string().optional(),
+	sortOrder: z.number().int().nonnegative().optional(),
+	locked: z.boolean().optional(),
+	contextWeight: planCardContextWeightSchema.optional(),
+});
+
+export const updatePlanCardSchema = z.object({
+	series: planCardSeriesSchema.optional(),
+	title: z.string().trim().min(1).optional(),
+	body: z.string().optional(),
+	sortOrder: z.number().int().nonnegative().optional(),
+	locked: z.boolean().optional(),
+	contextWeight: planCardContextWeightSchema.optional(),
+	archived: z.boolean().optional(),
+});
+
+export const proposePlanSchema = z.object({
+	name: z.string().trim().min(1),
+	missionNeed: z.object({
+		capabilityGap: z.string().trim().min(1),
+		operationalContext: z.string().trim().min(1),
+	}),
+	initialCards: z
+		.array(
+			z.object({
+				series: planCardSeriesSchema,
+				title: z.string().trim().min(1),
+				body: z.string().optional(),
+			}),
+		)
+		.default([]),
+});
+
 export const planCardSchema = z.object({
 	id: z.string().min(1),
 	planId: z.string().min(1),
@@ -520,9 +562,7 @@ export const planCardSchema = z.object({
 	body: z.string().nullable().default(null),
 	sortOrder: z.number().int().nullable().default(null),
 	locked: z.boolean().default(false),
-	contextWeight: z
-		.enum(['always', 'conditional', 'never'])
-		.default('conditional'),
+	contextWeight: planCardContextWeightSchema.default('conditional'),
 	archivedAt: z.number().int().nonnegative().nullable().default(null),
 	createdAt: z.number().int().nonnegative(),
 	updatedAt: z.number().int().nonnegative(),

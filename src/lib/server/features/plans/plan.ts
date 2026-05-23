@@ -40,6 +40,18 @@ export type UpdatePlanInput = Partial<
 	doctrineLifecycle?: DoctrineLifecycle;
 	archived?: boolean;
 	projectId?: string | null;
+	missionNeed?: {
+		gap?: string | null;
+		context?: string | null;
+		priority?: string | null;
+		source?: string | null;
+	};
+	commandersIntent?: {
+		purpose?: string | null;
+		endState?: string | null;
+		keyTasks?: string[];
+		constraints?: string[];
+	};
 };
 
 export const DOCTRINE_LIFECYCLE_TRANSITIONS: Record<
@@ -174,6 +186,32 @@ export class PlanService {
 		}
 		if (input.projectId !== undefined)
 			values.projectId = input.projectId ?? null;
+
+		if (input.missionNeed !== undefined) {
+			if (input.missionNeed.gap !== undefined)
+				values.missionNeedGap = input.missionNeed.gap ?? null;
+			if (input.missionNeed.context !== undefined)
+				values.missionNeedContext = input.missionNeed.context ?? null;
+			if (input.missionNeed.priority !== undefined)
+				values.missionNeedPriority =
+					(input.missionNeed.priority as PlanRow['missionNeedPriority']) ?? null;
+			if (input.missionNeed.source !== undefined)
+				values.missionNeedSource =
+					(input.missionNeed.source as PlanRow['missionNeedSource']) ?? null;
+		}
+
+		if (input.commandersIntent !== undefined) {
+			if (input.commandersIntent.purpose !== undefined)
+				values.intentPurpose = input.commandersIntent.purpose ?? null;
+			if (input.commandersIntent.endState !== undefined)
+				values.intentEndState = input.commandersIntent.endState ?? null;
+			if (input.commandersIntent.keyTasks !== undefined)
+				values.intentKeyTasksJson = JSON.stringify(input.commandersIntent.keyTasks);
+			if (input.commandersIntent.constraints !== undefined)
+				values.intentConstraintsJson = JSON.stringify(
+					input.commandersIntent.constraints,
+				);
+		}
 
 		this.db.update(plans).set(values).where(eq(plans.id, id)).run();
 		return this.get(id);
@@ -488,8 +526,8 @@ export class PlanCardService {
 				planId: input.planId,
 				series: input.series ?? '100',
 				title: input.title.trim(),
-				body: input.body?.trim() ?? null,
-				sortOrder: input.sortOrder ?? null,
+				body: input.body?.trim() ?? '',
+				sortOrder: input.sortOrder ?? 0,
 				locked: input.locked ? 1 : 0,
 				contextWeight: input.contextWeight ?? 'conditional',
 				archivedAt: null,
@@ -523,6 +561,11 @@ export class PlanCardService {
 
 	archive(id: string): PlanCard | null {
 		return this.update(id, { archived: true });
+	}
+
+	referencesTo(cardId: string): string[] {
+		void cardId;
+		return [];
 	}
 }
 

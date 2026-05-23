@@ -1,8 +1,11 @@
 <script lang="ts">
 	import { onDestroy, untrack } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { FolderSearch, X, RefreshCw, Check, AlertCircle, Loader, FolderOpen } from '@lucide/svelte';
-	import type { IntakeScan, IntakeScanFileKind, Project } from '$lib/shared/types';
+	import { FolderSearch, X, RefreshCw, Check, AlertCircle, Loader, FolderOpen, MapPin, Plus, Trash2 } from '@lucide/svelte';
+	import type { IntakeScan, IntakeScanFileKind, Plan, Project } from '$lib/shared/types';
+	import { Button } from '$lib/ui/button';
+	import * as Dialog from '$lib/ui/dialog';
+	import type { PlanCardSeries } from '$lib/shared/types';
 
 	let { data } = $props();
 
@@ -127,6 +130,111 @@
 			await goto(`/projects/${project.id}`);
 		} finally {
 			organising = null;
+		}
+	}
+
+	// ── Propose plan ─────────────────────────────────────────────────────────
+	type ProposedCard = { series: PlanCardSeries; title: string };
+
+	let proposeOpen = $state(false);
+	let proposingScan = $state<IntakeScan | null>(null);
+	let proposeName = $state('');
+	let proposeGap = $state('');
+	let proposeContext = $state('');
+	let proposeCards = $state<ProposedCard[]>([]);
+	let proposeBusy = $state(false);
+	let proposeError = $state<string | null>(null);
+
+	function openPropose(scan: IntakeScan): void {
+		proposingScan = scan;
+		const parts = scan.folderPath.replace(/\\/g, '/').split('/').filter(Boolean);
+		proposeName = parts[parts.length - 1] ?? '';
+		proposeGap = '';
+		proposeContext = '';
+		proposeCards = [{ series: '100', title: `Purpose of ${proposeName}` }];
+		proposeError = null;
+		proposeOpen = true;
+	}
+
+	function addProposeCard(): void {
+		proposeCards = [...proposeCards, { series: '300', title: '' }];
+	}
+
+	function removeProposeCard(idx: number): void {
+		proposeCards = proposeCards.filter((_, i) => i !== idx);
+	}
+
+	function setProposeCardSeries(idx: number, series: PlanCardSeries): void {
+		proposeCards = proposeCards.map((c, i) => (i === idx ? { ...c, series } : c));
+	}
+
+	function setProposeCardTitle(idx: number, title: string): void {
+		proposeCards = proposeCards.map((c, i) => (i === idx ? { ...c, title } : c));
+	}
+
+	const proposeValid = $derived(
+		proposeName.trim().length > 0 &&
+		proposeGap.trim().length > 0 &&
+		proposeContext.trim().length > 0,
+	);
+
+	const SERIES_OPTIONS: { value: PlanCardSeries; label: string }[] = [
+		{ value: '100', label: '100 — Purpose' },
+		{ value: '200', label: '200 — Context' },
+		{ value: '300', label: '300 — Goals' },
+		{ value: '400', label: '400 — Rules' },
+		{ value: '500', label: '500 — Standards' },
+		{ value: '600', label: '600 — Tools & Sources' },
+		{ value: '700', label: '700 — Workflows' },
+		{ value: '800', label: '800 — Projects' },
+		{ value: '900', label: '900 — Actions' },
+		{ value: '1000', label: '1000 — Review' },
+	];
+
+	async function submitPropose(): Promise<void> {
+		if (!proposingScan || !proposeValid || proposeBusy) return;
+		proposeBusy = true;
+		proposeError = null;
+		try {
+			const res = await fetch(
+				`/api/intake/scans/${proposingScan.id}/propose-plan`,
+				{
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						name: proposeName.trim(),
+						missionNeed: {
+							capabilityGap: proposeGap.trim(),
+							operationalContext: proposeContext.trim(),
+						},
+						initialCards: proposeCards
+							.filter((c) => c.title.trim())
+							.map((c) => ({ series: c.series, title: c.title.trim() })),
+					}),
+				},
+			);
+			if (res.status === 201) {
+				const body = (await res.json()) as { plan: Plan };
+				await goto(`/plans/${body.plan.id}`);
+				return;
+			}
+			const err = await res
+				.json()
+				.catch(() => ({}) as { error?: { code?: string; message?: string } });
+			const errBody = err as { error?: { code?: string; message?: string } };
+			if (res.status === 409) {
+				proposeError = `A plan named "${proposeName.trim()}" already exists. Choose a different name.`;
+			} else if (res.status === 422) {
+				proposeError =
+					'This scan is not yet complete. Wait for it to finish before creating a plan.';
+			} else {
+				proposeError =
+					errBody.error?.message ?? `Could not create plan (${res.status}).`;
+			}
+		} catch {
+			proposeError = 'Network error. Please try again.';
+		} finally {
+			proposeBusy = false;
 		}
 	}
 
@@ -298,14 +406,174 @@
 									<RefreshCw size={12} />
 									<span>Organise</span>
 								{/if}
-							</button>
-						</div>
+							</button>						<button
+							class="organise-btn propose-btn"
+							type="button"
+							onclick={() => openPropose(scan)}
+						>
+							<MapPin size={12} />
+							<span>Create plan</span>
+						</button>						</div>
 					{/if}
 				</li>
 			{/each}
 		</ul>
 	{/if}
 </div>
+
+<!-- ── Propose-plan dialog ──────────────────────────────────────────────── -->
+<Dialog.Root bind:open={proposeOpen}>
+	<Dialog.Portal>
+		<Dialog.Overlay />
+		<Dialog.Content class="propose-dialog-content">
+			<Dialog.Header>
+				<Dialog.Title>Create plan from scan</Dialog.Title>
+				<Dialog.Description>
+					Review and edit the pre-filled fields, then confirm to create a new
+					doctrine plan.
+				</Dialog.Description>
+			</Dialog.Header>
+
+			<div class="propose-form">
+				<label class="propose-field">
+					<span class="propose-label">Plan name <span class="req">*</span></span>
+					<input
+						class="propose-input"
+						type="text"
+						bind:value={proposeName}
+						placeholder="Enter plan name"
+						disabled={proposeBusy}
+						required
+						aria-required="true"
+					/>
+				</label>
+
+				<fieldset class="propose-fieldset">
+					<legend class="propose-legend">Mission Need</legend>
+
+					<label class="propose-field">
+						<span class="propose-label"
+							>Capability gap <span class="req">*</span></span
+						>
+						<textarea
+							class="propose-textarea"
+							bind:value={proposeGap}
+							rows={3}
+							placeholder="What capability gap does this plan address?"
+							disabled={proposeBusy}
+							required
+							aria-required="true"
+						></textarea>
+					</label>
+
+					<label class="propose-field">
+						<span class="propose-label"
+							>Operational context <span class="req">*</span></span
+						>
+						<textarea
+							class="propose-textarea"
+							bind:value={proposeContext}
+							rows={3}
+							placeholder="What is the operational context?"
+							disabled={proposeBusy}
+							aria-required="true"
+							required
+						></textarea>
+					</label>
+				</fieldset>
+
+				<fieldset class="propose-fieldset">
+					<legend class="propose-legend propose-legend-actions">
+						<span>Initial cards</span>
+						<button
+							class="add-card-link"
+							type="button"
+							onclick={addProposeCard}
+							disabled={proposeBusy}
+						>
+							<Plus size={11} />
+							<span>Add card</span>
+						</button>
+					</legend>
+
+					{#if proposeCards.length === 0}
+						<p class="no-cards-note">
+							No initial cards. The plan will be created with an empty card
+							board.
+						</p>
+					{:else}
+						<ul class="propose-cards-list" role="list">
+							{#each proposeCards as card, idx (idx)}
+								<li class="propose-card-row">
+									<select
+										class="propose-series-select"
+										value={card.series}
+										aria-label="Card series"
+										onchange={(e) =>
+											setProposeCardSeries(
+												idx,
+												(e.currentTarget as HTMLSelectElement)
+													.value as PlanCardSeries,
+											)}
+										disabled={proposeBusy}
+									>
+										{#each SERIES_OPTIONS as opt (opt.value)}
+											<option value={opt.value}>{opt.label}</option>
+										{/each}
+									</select>
+									<input
+										class="propose-card-title-input"
+										type="text"
+										placeholder="Card title"
+										value={card.title}
+										oninput={(e) =>
+											setProposeCardTitle(
+												idx,
+												(e.currentTarget as HTMLInputElement).value,
+											)}
+										disabled={proposeBusy}
+										aria-label="Card title"
+									/>
+									<button
+										class="remove-card-btn"
+										type="button"
+										onclick={() => removeProposeCard(idx)}
+										disabled={proposeBusy}
+										aria-label="Remove card"
+									>
+										<Trash2 size={13} />
+									</button>
+								</li>
+							{/each}
+						</ul>
+					{/if}
+				</fieldset>
+
+				{#if proposeError}
+					<p class="propose-error" role="alert">{proposeError}</p>
+				{/if}
+			</div>
+
+			<Dialog.Footer>
+				<Button
+					variant="outline"
+					onclick={() => {
+						proposeOpen = false;
+					}}
+					disabled={proposeBusy}
+				>
+					Discard
+				</Button>
+				<Button
+					onclick={() => void submitPropose()}
+					disabled={!proposeValid || proposeBusy}
+				>
+					{proposeBusy ? 'Creating plan…' : 'Create plan'}
+				</Button>
+			</Dialog.Footer>
+		</Dialog.Content>
+	</Dialog.Portal>
+</Dialog.Root>
 
 <style>
 .shell {
@@ -644,6 +912,18 @@
 .organise-row {
 	display: flex;
 	justify-content: flex-end;
+	gap: var(--sp-2);
+}
+
+.propose-btn {
+	border-color: var(--accent-soft);
+	color: var(--accent-text);
+}
+
+.propose-btn:hover {
+	background: var(--accent-soft);
+	border-color: var(--accent);
+	color: var(--text-primary);
 }
 
 .organise-btn {
@@ -675,5 +955,205 @@
 
 @keyframes spin {
 	to { transform: rotate(360deg); }
+}
+
+/* ── Propose dialog form ── */
+:global(.propose-dialog-content) {
+	max-width: 560px !important;
+	max-height: 90vh;
+	overflow-y: auto;
+}
+
+.propose-form {
+	display: flex;
+	flex-direction: column;
+	gap: var(--sp-4);
+	padding: 0 0 var(--sp-2);
+}
+
+.propose-field {
+	display: flex;
+	flex-direction: column;
+	gap: var(--sp-1);
+}
+
+.propose-label {
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--text-secondary);
+}
+
+.req {
+	color: var(--red);
+}
+
+.propose-input,
+.propose-textarea {
+	padding: 8px 10px;
+	border: 1px solid var(--border-default);
+	border-radius: var(--radius-sm);
+	background: var(--bg-base);
+	color: var(--text-primary);
+	font: inherit;
+	font-size: 13px;
+	outline: none;
+	transition: border-color var(--motion-fast);
+}
+
+.propose-input:focus,
+.propose-textarea:focus {
+	border-color: var(--accent);
+}
+
+.propose-input::placeholder,
+.propose-textarea::placeholder {
+	color: var(--text-placeholder);
+}
+
+.propose-textarea {
+	resize: vertical;
+	line-height: 1.5;
+}
+
+.propose-fieldset {
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--radius-md);
+	padding: var(--sp-3);
+	display: flex;
+	flex-direction: column;
+	gap: var(--sp-3);
+}
+
+.propose-legend {
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+	color: var(--text-muted);
+	padding: 0 var(--sp-1);
+}
+
+.propose-legend-actions {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--sp-3);
+	width: 100%;
+}
+
+.add-card-link {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	font: inherit;
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.03em;
+	color: var(--accent-text);
+	background: transparent;
+	border: none;
+	cursor: pointer;
+	text-transform: none;
+	padding: 0;
+	transition: color var(--motion-fast);
+}
+
+.add-card-link:hover:not(:disabled) {
+	color: var(--accent-hover);
+}
+
+.add-card-link:disabled {
+	opacity: 0.4;
+}
+
+.no-cards-note {
+	font-size: 12.5px;
+	color: var(--text-placeholder);
+	margin: 0;
+	font-style: italic;
+}
+
+.propose-cards-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: var(--sp-2);
+}
+
+.propose-card-row {
+	display: grid;
+	grid-template-columns: 160px 1fr 28px;
+	gap: var(--sp-2);
+	align-items: center;
+}
+
+.propose-series-select {
+	padding: 6px 8px;
+	border: 1px solid var(--border-default);
+	border-radius: var(--radius-sm);
+	background: var(--bg-base);
+	color: var(--text-primary);
+	font: inherit;
+	font-size: 12px;
+	outline: none;
+	cursor: pointer;
+	transition: border-color var(--motion-fast);
+}
+
+.propose-series-select:focus {
+	border-color: var(--accent);
+}
+
+.propose-card-title-input {
+	padding: 6px 8px;
+	border: 1px solid var(--border-default);
+	border-radius: var(--radius-sm);
+	background: var(--bg-base);
+	color: var(--text-primary);
+	font: inherit;
+	font-size: 12.5px;
+	outline: none;
+	transition: border-color var(--motion-fast);
+}
+
+.propose-card-title-input:focus {
+	border-color: var(--accent);
+}
+
+.propose-card-title-input::placeholder {
+	color: var(--text-placeholder);
+}
+
+.remove-card-btn {
+	display: grid;
+	place-items: center;
+	width: 28px;
+	height: 28px;
+	border: none;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--text-placeholder);
+	cursor: pointer;
+	transition: color var(--motion-fast), background var(--motion-fast);
+}
+
+.remove-card-btn:hover:not(:disabled) {
+	color: var(--red);
+	background: rgba(239, 68, 68, 0.08);
+}
+
+.remove-card-btn:disabled {
+	opacity: 0.3;
+}
+
+.propose-error {
+	font-size: 12.5px;
+	color: var(--red);
+	margin: 0;
+	padding: var(--sp-2) var(--sp-3);
+	background: rgba(239, 68, 68, 0.08);
+	border-radius: var(--radius-sm);
 }
 </style>
