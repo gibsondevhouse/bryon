@@ -189,10 +189,9 @@ Read these before writing any code:
 
 | Doc | What it covers |
 | --- | --- |
-| `dev/docs/stack.md` | Full tech stack, file layout, DB schema, API surface, server feature map, boot sequence |
-| `dev/docs/roadmap.md` | Product vision, doctrine loop, milestone map (V1 → V2 → V3) |
-| `dev/docs/decisions.md` | 8 locked architectural decisions with rationale |
-| `dev/plans/build-phases.md` | Phased build sequence with status — follow this order |
+| `dev/200-architecture/stack.md` | Full tech stack, file layout, DB schema, API surface, server feature map, boot sequence |
+| `dev/100-purpose/bryon.md` | Product vision, tiered model design, polished-release criteria |
+| `dev/700-phases/build-phases.md` | Phased build sequence with status — follow this order |
 
 ---
 
